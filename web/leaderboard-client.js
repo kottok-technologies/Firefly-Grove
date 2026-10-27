@@ -6,6 +6,6 @@ export async function raceApi(path,{method='GET',body,profile}={}){
   try{
     const response=await fetch(LEADERBOARD_ORIGIN+'/api/v1/'+path,{method,signal:controller.signal,headers:{...(body?{'Content-Type':'application/json'}:{}),...(profile?.token?{Authorization:'Bearer '+profile.token}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json();if(!response.ok)throw Error(data.error||'The leaderboard is unavailable.');return data;
-  }catch(error){if(error.name==='AbortError'||error instanceof TypeError)throw Error('Cannot reach the leaderboard. Check your connection and try again.');throw error;}
+  }catch(error){if(error.name==='AbortError'||error instanceof TypeError)throw Error('Cannot reach the leaderboard. Check your connection and try again.',{cause:error});throw error;}
   finally{clearTimeout(timer);}
 }

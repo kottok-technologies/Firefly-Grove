@@ -42,3 +42,5 @@ credentials
 !*.example.tfvars.json
 crash.log
 crash.*.log
+coverage/
+reports/

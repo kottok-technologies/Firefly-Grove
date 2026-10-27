@@ -1,10 +1,15 @@
 # Firefly Grove
 
+[![CI](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/ci.yml/badge.svg)](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/codeql.yml/badge.svg)](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/codeql.yml)
+
+Pushes and pull requests run lint, tests, enforced coverage, dependency/security scans, and Android/Lambda builds. See [.github/PIPELINE.md](.github/PIPELINE.md) for commands, coverage scope, artifacts, existing security findings and deployment boundaries.
+
 A calm, original firefly-themed region puzzle for Android, with a mobile-only browser preview. No forced advertising, accounts, analytics, or paid dependencies.
 
 ## Play locally
 
-Requires Node.js 20 or newer. No npm installation is needed.
+Requires Node.js 24.12 or newer within Node 24. Playing locally needs no npm installation; CI lint and coverage tools require `npm ci`.
 
 ```sh
 npm start
