@@ -244,8 +244,9 @@ jobs:
   release:
     name: Signed Android artifacts
     needs: gate
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch')
+    if: "!cancelled() && needs.gate.result == 'success' && github.ref ==
+      'refs/heads/main' && (github.event_name == 'push' || github.event_name ==
+      'workflow_dispatch')"
     permissions:
       contents: read
       actions: read
