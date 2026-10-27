@@ -77,4 +77,4 @@ There is no always-on server or NAT gateway. AWS charges for API/Lambda/DynamoDB
 
 Each deploy publishes a Lambda version and moves `live` to it. For rollback, revert the source change and create a new reviewed Terraform plan; do not edit the alias out-of-band and leave state drift. Data/schema migrations require their own compatibility/backup review. Bootstrap state, application state and player data are separate; rolling back Lambda code does not roll back player data.
 
-The connected APK is debug-signed on GitHub's ephemeral runner. It may not upgrade a locally debug-signed install; uninstalling clears local game/profile data. Store release signing and Play distribution remain separate work.
+The connected APK now uses the persistent release/upload key shared with local release builds. The workflow also produces a Play upload bundle. Earlier debug installs have incompatible certificates; uninstalling clears local game/profile data. See [Android signing](../docs/ANDROID_SIGNING.md) for backup, migration, and Google's separate Play App Signing certificate. Play publishing remains manual.
