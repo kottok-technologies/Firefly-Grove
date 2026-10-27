@@ -1,6 +1,6 @@
 # Firefly Grove
 
-AWS infrastructure and reviewed deployments are managed with [Terraform](infrastructure/README.md). Bootstrap and production applies are explicit; no infrastructure has been applied yet.
+AWS infrastructure and reviewed deployments are managed with [Terraform](infrastructure/README.md). Bootstrap is applied and GitHub deployment is configured. Production application deployment remains gated by CI/security checks and explicit approval.
 
 [![CI](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/ci.yml/badge.svg)](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/codeql.yml/badge.svg)](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/codeql.yml)
