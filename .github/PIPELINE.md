@@ -20,7 +20,7 @@ Artifacts remain downloadable from Actions for 14 days. Pull-request Android art
 
 ## Coverage
 
-Coverage fails below **95% lines/statements, 90% functions, or 85% branches**, aggregated across the puzzle engine, daily timing, drag logic, AWS API, DynamoDB store, dialog rendering, player profile lifecycle, worker protocol and deployment API guards and saved-plan integrity guards. Browser DOM wiring, the service worker, generated/copied files,  and native Android code are outside this JavaScript coverage scope. Android also runs three JVM URL/CSP policy security tests; those tests are separate from the JavaScript coverage report.
+Coverage fails below **95% lines/statements, 90% functions, or 85% branches**, aggregated across the puzzle engine, daily timing, drag logic, AWS API, DynamoDB store, dialog rendering, player profile lifecycle, journey hearts replay/queueing, worker protocol and deployment API guards and saved-plan integrity guards. Browser DOM wiring, the service worker, generated/copied files,  and native Android code are outside this JavaScript coverage scope. Android also runs three JVM URL/CSP policy security tests; those tests are separate from the JavaScript coverage report.
 
 The local DynamoDB test refuses non-loopback endpoints and uses dummy credentials directly, so it cannot write to your AWS account. CI runs every integration test; local `npm test` skips that one test unless `DYNAMODB_ENDPOINT` is set. A coverage run without the local database is expected to fail the DynamoDB coverage threshold.
 

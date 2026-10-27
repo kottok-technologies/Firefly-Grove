@@ -1,6 +1,6 @@
 {
   "name": "firefly-grove",
-  "version": "1.4.6",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -35,7 +35,9 @@
       "web/dialogs.js",
       "web/generator-protocol.js",
       "scripts/github-deploy-api.mjs",
-      "web/profile.js"
+      "web/profile.js",
+      "web/hearts.js",
+      "aws-leaderboard/src/journey.mjs"
     ],
     "reporter": [
       "text",

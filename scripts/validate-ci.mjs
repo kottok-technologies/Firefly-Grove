@@ -39,7 +39,7 @@ for(const directory of ['', 'aws-leaderboard/']){
 }
 const manifest=JSON.parse(await read('package.json')),gradle=await read('android/app/build.gradle');assert.ok(gradle.includes(`versionName '${manifest.version}'`),'Android and npm versions differ');
 assert.match(await read('android/gradle/wrapper/gradle-wrapper.properties'),/^distributionSha256Sum=[a-f0-9]{64}$/m,'Gradle distribution checksum required');
-for(const file of ['web/profile.js','web/engine.js','web/daily.js','web/gestures.js','web/leaderboard-client.js','web/leaderboard-config.js']){
+for(const file of ['web/hearts.js','web/profile.js','web/engine.js','web/daily.js','web/gestures.js','web/leaderboard-client.js','web/leaderboard-config.js']){
   await access(new URL(file,root));assert.ok((await read('web/sw.js')).includes('./'+file.slice(4)),`${file}: missing offline cache entry`);
 }
 for(const file of ['engine.js','daily.js'])assert.equal(await read('web/'+file),await read('aws-leaderboard/src/'+file),`${file}: AWS puzzle copy is stale`);

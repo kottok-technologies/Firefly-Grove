@@ -1,3 +1,4 @@
+import {initializeHeartFinds,heartsManager} from './hearts.js';
 import {profileManager} from './profile.js';
 import {renderDialog} from './dialogs.js';
 import {raceApi,LEADERBOARD_ORIGIN} from './leaderboard-client.js';
@@ -21,10 +22,12 @@ state.dailyRecords ||= {};
 state.leaderboardProfiles ||= {};
 const profiles=profileManager({profiles:state.leaderboardProfiles,origin:LEADERBOARD_ORIGIN,api:raceApi,persist:()=>save()});
 state.leaderboardProfile=profiles.profile;
+const hearts=heartsManager({state,origin:LEADERBOARD_ORIGIN,profile:profiles.profile,ensureOnline:profiles.ensureOnline,api:raceApi,persist:()=>save()});
 const puzzleKey = puzzle => puzzle.size + ':' + puzzle.regions.map(r=>r.toString(36)).join('');
 let game=state.game, busy=false, tick=Date.now(), pendingTap=null, worker=null, isPlaying=false;
 let renderedGame=null, idleTimer=null;
 let mode='journey';
+if(game&&!game.completed)initializeHeartFinds(game);
 let drag=null,suppressDragClick=false;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const idleClasses=['idle-bob','idle-wiggle','idle-flutter'];
@@ -87,6 +90,7 @@ function renderHome(){
   const journey=state.game;
   $('play-label').textContent=journey&&!journey.completed?`Continue level ${journey.level}`:state.level===1?'Begin training':`Play level ${state.level}`;
   $('play-meta').textContent=`${config.size} × ${config.size} · ${config.givens===2?'Two starter fireflies':config.givens===1?'One starter firefly':config.label}`;
+  $('hearts-home-status').textContent=hearts.pending().length?`${hearts.pending().length} completed ${hearts.pending().length===1?'level':'levels'} awaiting upload today`:'Earn 1–3 hearts for each journey level you finish.';
   $('home-hints').textContent=state.hints;$('home-reveals').textContent=state.reveals;
   $('progress').style.width=`${state.completed%5/5*100}%`;
   $('milestone-text').textContent=`${5-state.completed%5} more ${5-state.completed%5===1?'level':'levels'} to your next care package.`;
@@ -208,7 +212,7 @@ function updateTime(){if(game)$('time').textContent=mode==='daily'?formatSpeed(d
 async function newLevel(restart=false){
   if(mode==='daily')return newDailyRun(game?.dailyDay||dailyKey());
   cancelTap();cancelDrag();busy=true;$('loading').hidden=false;$('hint').disabled=$('reveal').disabled=true;
-  if(restart){game={...game,marks:Array(game.size**2).fill(0),lives:3,mistakes:0,elapsed:0,completed:false};game.givens.forEach(i=>game.marks[i]=2);finishLoad();return;}
+  if(restart){game={...game,marks:Array(game.size**2).fill(0),lives:3,mistakes:0,elapsed:0,completed:false,heartFinds:[],heartCompletion:null};game.givens.forEach(i=>game.marks[i]=2);finishLoad();return;}
   let seed=(state.installSeed+Math.imul(state.level,2654435761))>>>0;
   try{
     game=await new Promise((resolve,reject)=>{
@@ -219,13 +223,14 @@ async function newLevel(restart=false){
   state.puzzleKeys.push(puzzleKey(game));
   finishLoad();
 }
-function finishLoad(){busy=false;$('home-note').hidden=true;$('loading').hidden=true;$('hint').disabled=$('reveal').disabled=false;tick=Date.now();render();save();message(game.givens.length?`${game.givens.length===2?'Two fireflies have':'One firefly has'} already settled in. Let's find their friends.`:'A fresh patch of the grove. Take your time and follow the colors.');}
+function finishLoad(){if(mode==='journey')initializeHeartFinds(game);busy=false;$('home-note').hidden=true;$('loading').hidden=true;$('hint').disabled=$('reveal').disabled=false;tick=Date.now();render();save();message(game.givens.length?`${game.givens.length===2?'Two fireflies have':'One firefly has'} already settled in. Let's find their friends.`:'A fresh patch of the grove. Take your time and follow the colors.');}
 function vibrate(){if(state.settings.haptics)navigator.vibrate?.(50);}
 function autoCross(){if(mode==='daily'||!state.settings.autoCross)return;const n=game.size,targets=game.marks.flatMap((v,i)=>v===2?[i]:[]);game.marks.forEach((v,i)=>{if(!v&&!isTarget(game,i)&&targets.some(t=>Math.floor(t/n)===Math.floor(i/n)||t%n===i%n||game.regions[t]===game.regions[i]||(Math.abs(Math.floor(t/n)-Math.floor(i/n))<=1&&Math.abs(t%n-i%n)<=1)))game.marks[i]=1;});}
 function move(i,target){
   if(!isPlaying||busy||modal.open)return;
   const result=applyMove(game,i,target);
   if(result==='ignored')return;
+  if(target&&mode==='journey')game.heartFinds.push(i);
   if(target&&mode==='daily'&&game.online?.status==='active')game.rankedFinds.push(i);
   if(mode==='daily'&&game.lives===0)freezeDailyRun(game);
   if(result==='mistake'){vibrate();message('No firefly here. Take a breath and look at the colors. One life lost.');}
@@ -296,15 +301,18 @@ $('board').addEventListener('contextmenu',e=>{
 });
 function win(){
   if(mode==='daily'){winDaily();return;}
+  const completedGame=game;
+  game.heartCompletion=hearts.queue(game);
+  hearts.flush().then(()=>updateJourneyHeartStatus(completedGame));
   state.completed++;state.level++;let reward=false;
   if(state.completed%5===0){state.hints+=2;state.reveals++;reward=true;}
   save();render();
-  const completedGame=game;
   // Let the last firefly finish arriving before covering the board.
   setTimeout(()=>{
     if(!isPlaying||game!==completedGame)return;
     dialog('journeyWin',{details:`Every firefly found its home. Level ${game.level} complete in ${$("time").textContent}, with ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}.`,next:`Wander to level ${state.level} →`});
-    $('win-reward').hidden=!reward;
+    $('win-reward').hidden=!reward;updateJourneyHeartStatus(completedGame);
+    $('journey-hearts-board').onclick=()=>showHeartsLeaderboard(completedGame.heartCompletion?.body.day);
     $('next-level').onclick=()=>{close();newLevel();};
   },reducedMotion.matches?0:740);
 }
@@ -333,7 +341,7 @@ function offerReward(kind){
   const native=location.origin==='https://appassets.androidplatform.net';
   dialog('reward',{symbol:kind==="life"?"♡":"✧",details:`${kind==="life"?"Restore one life":kind==="hints"?"Add one hint":"Add one firefly reveal"} with an optional reward video. You can always keep playing and earn tools every five completed levels.`,note:native?"Reward videos are unavailable until an ad provider is configured for this Android build.":"Browser preview: this is a simulated reward. No real advertisement will play.",back:game?.lives===0?"Back to restart":"Back to the grove"});
   $('preview-reward').hidden=native;
-  if(!native)$('preview-reward').onclick=()=>{if(kind==='life')game.lives=1;else state[kind]++;save();render();close();message(kind==='life'?'One life restored. Take your time.':'Your preview reward is ready. Select the tool to use it.');};
+  if(!native)$('preview-reward').onclick=()=>{if(kind==='life'){game.heartFinds.push(-1);game.lives=1;}else state[kind]++;save();render();close();message(kind==='life'?'One life restored. Take your time.':'Your preview reward is ready. Select the tool to use it.');};
   $('reward-back').onclick=()=>{if(isPlaying&&game?.lives===0)showLoss();else close();};
 }
 function tool(kind){
@@ -342,7 +350,7 @@ function tool(kind){
   if(state[kind]<=0){offerReward(kind);return;}
   const hint=kind==='hints'?findHint(game):{cells:[game.marks.findIndex((v,i)=>v!==2&&isTarget(game,i))],target:true,text:'A hidden friend, brought into the light. See what this firefly tells you about its row, column, and color.'};
   if(!hint){message('No explained deduction is available right now. Try checking your crosses or finding another firefly. No tool was spent.');return;}
-  state[kind]--;for(const i of hint.cells)applyMove(game,i,hint.target);autoCross();render();message(hint.text,hint.colors);hint.cells.forEach(i=>$('board').children[i].classList.add('flash'));save();if(game.completed)win();
+  state[kind]--;for(const i of hint.cells){const result=applyMove(game,i,hint.target);if(hint.target&&result!=='ignored')game.heartFinds.push(i);}autoCross();render();message(hint.text,hint.colors);hint.cells.forEach(i=>$('board').children[i].classList.add('flash'));save();if(game.completed)win();
 }
 $('hint').onclick=()=>tool('hints');$('reveal').onclick=()=>tool('reveals');
 $('restart').onclick=()=>{if(!game||busy)return;dialog('restart',{details:mode==="daily"?"Restart the same daily puzzle with three lives and a fresh clock. Your personal best stays saved. The current clock keeps running until you restart.":"Restart this puzzle with three lives. Your used tools stay spent. Restarting is always free.",restart:mode==="daily"?"Restart daily":"Restart level"});$('confirm-restart').onclick=()=>{close();if(game.completed){newLevel();}else newLevel(true);};$('keep-playing').onclick=close;};
@@ -365,7 +373,7 @@ $('settings').onclick=showSettings;
 setInterval(()=>{const now=Date.now();if(mode==='journey'&&isPlaying&&game&&!busy&&!game.completed&&game.lives>0&&!document.hidden&&!modal.open){game.elapsed+=Math.min(2,Math.floor((now-tick)/1000));updateTime();if(game.elapsed%10===0)save();}tick=now;},1000);
 setInterval(()=>{if(mode==='daily'&&isPlaying&&game&&!busy&&!document.hidden)updateTime();},100);
 setInterval(()=>{if(!isPlaying)renderHome();},30000);
-document.addEventListener('visibilitychange',()=>{cancelTap();cancelDrag();save();tick=Date.now();if(document.hidden){stopIdle();finishCellMotion();}else{renderHome();updateTime();scheduleIdle();}});
+document.addEventListener('visibilitychange',()=>{cancelTap();cancelDrag();save();tick=Date.now();if(document.hidden){stopIdle();finishCellMotion();}else{renderHome();updateTime();scheduleIdle();hearts.flush();}});
 render();save();
 if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
@@ -395,7 +403,32 @@ async function submitRace(run){
   catch(error){run.online.error=error.message+' Retry when connected; the server clock keeps running until your finish arrives.';}
   finally{submittingRaces.delete(run);delete run.online.sending;try{localStorage.setItem(STORAGE,JSON.stringify(state));}catch{}updateRaceStatus(run);}
 }
-const rankingButton=document.createElement('button');rankingButton.id='leaderboard';rankingButton.className='secondary leaderboard-button';rankingButton.textContent='Daily leaderboard ♕';rankingButton.onclick=()=>showLeaderboard();$('daily-best').before(rankingButton);
+const rankingButton=document.createElement('button');rankingButton.id='leaderboard';rankingButton.className='secondary leaderboard-button';rankingButton.textContent='Speed leaderboard ◷';rankingButton.onclick=()=>showLeaderboard();$('daily-best').before(rankingButton);
 
-if(LEADERBOARD_ORIGIN)profiles.ensureOnline().catch(()=>{});
+if(LEADERBOARD_ORIGIN)profiles.ensureOnline().then(()=>hearts.flush()).catch(()=>{});
 window.addEventListener('online',()=>{if(LEADERBOARD_ORIGIN)profiles.ensureOnline().catch(()=>{});});
+
+function updateJourneyHeartStatus(run){
+  if(game!==run||!$('journey-heart-status'))return;
+  const entry=run.heartCompletion;
+  $('journey-heart-status').textContent=!entry?'This level has already contributed its hearts.':entry.status==='synced'?`+${entry.hearts} hearts · Daily total ${entry.result.mine.hearts} · Rank #${entry.result.mine.rank}`:entry.status==='duplicate'?'This level has already contributed its hearts.':entry.status==='pending'?`${entry.hearts} hearts awaiting upload. Sync before 00:00 UTC.${entry.error?' '+entry.error:''}`:entry.error;
+}
+$('hearts-leaderboard').onclick=()=>showHeartsLeaderboard();
+async function showHeartsLeaderboard(day=dailyKey()){
+  dialog('heartsLeaderboard');
+  $('hearts-day').value=day;$('hearts-day').max=dailyKey();$('hearts-day').min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+  $('hearts-day').onchange=()=>showHeartsLeaderboard($('hearts-day').value);$('hearts-refresh').onclick=()=>showHeartsLeaderboard(day);
+  const status=$('hearts-status'),list=$('hearts-entries');
+  try{
+    await hearts.flush();
+    const data=await raceApi('hearts?day='+encodeURIComponent(day),{profile:state.leaderboardProfile});if(!status.isConnected)return;
+    status.textContent=data.total?`${data.total} ${data.total===1?'player':'players'} · top 50${data.mine?' · You: #'+data.mine.rank+' · '+data.mine.hearts+' hearts':''}`:'No hearts yet. Finish a journey level to join today’s rankings!';
+    for(const entry of data.entries){
+      const row=document.createElement('div');row.className='ranking-row'+(entry.isYou?' ranking-you':'');
+      const who=document.createElement('span'),score=document.createElement('strong'),levels=document.createElement('small');
+      who.textContent=`#${entry.rank}  ${entry.name} · ${entry.tag}${entry.isYou?' (you)':''}`;score.textContent=`${entry.hearts} ♥`;levels.textContent=`${entry.levels} ${entry.levels===1?'level':'levels'} completed`;
+      row.append(who,score,levels);list.append(row);
+    }
+    if(hearts.pending().length)status.textContent+=' · Some levels are still awaiting upload.';
+  }catch(error){if(status.isConnected)status.textContent=error.status===404?'Heart rankings are awaiting the server update.':error.message;}
+}

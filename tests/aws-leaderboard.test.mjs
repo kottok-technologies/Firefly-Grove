@@ -2,12 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHandler,hash,normalizeName,validateFinds} from '../aws-leaderboard/src/service.mjs';
 import {createDailyGame} from '../web/daily.js';
+import {createGame,isTarget} from '../web/engine.js';
+import {validateJourneyCompletion} from '../aws-leaderboard/src/journey.mjs';
 
 const day='2026-10-27',finds=createDailyGame(day).solution.map((column,row)=>row*8+column);
 function fixture(){
   let now=Date.parse(day+'T12:00:00Z');
-  const players=new Map(),tokens=new Map(),runs=new Map(),active=new Map(),scores=new Map(),limits=new Map();
+  const players=new Map(),tokens=new Map(),runs=new Map(),active=new Map(),scores=new Map(),limits=new Map(),heartReceipts=new Map(),heartScores=new Map();
   const store={
+    async finishJourney(score){const key=score.playerId+':'+score.level;if(heartReceipts.has(key))return {credited:false};heartReceipts.set(key,score);const dayKey=score.day+score.playerId,previous=heartScores.get(dayKey);heartScores.set(dayKey,{...score,hearts:(previous?.hearts||0)+score.hearts,levels:(previous?.levels||0)+1});return {credited:true,hearts:score.hearts};},
+    async heartsBoard(date,id){let rank=1;const ranked=[...heartScores.values()].filter(row=>row.day===date).sort((a,b)=>b.hearts-a.hearts||a.playerId.localeCompare(b.playerId));const entries=ranked.map((row,index)=>{if(index&&row.hearts!==ranked[index-1].hearts)rank=index+1;return {rank,name:players.get(row.playerId).name,hearts:row.hearts,levels:row.levels,isYou:row.playerId===id};});return {day:date,total:entries.length,entries:entries.slice(0,50),mine:entries.find(entry=>entry.isYou)||null};},
     async createPlayer(p){players.set(p.id,p);tokens.set(p.tokenHash,p.id);},
     async playerByToken(token){return players.get(tokens.get(token))||null;},
     async rename(id,name){players.get(id).name=name;},
@@ -66,4 +70,35 @@ test('AWS validation rejects illegal solutions and handles dates, CORS and failu
   const health=await f.call('health');assert.equal(health.data.provider,'aws');assert.equal(health.headers['access-control-allow-origin'],'*');assert.equal((await f.call('health',{method:'OPTIONS'})).statusCode,204);
   const player=await register(f);assert.equal((await f.call('unknown',{player})).statusCode,404);
   f.store.board=async()=>{throw new Error('sensitive internal detail');};const failed=await f.call('leaderboard');assert.equal(failed.statusCode,503);assert.doesNotMatch(failed.body,/sensitive/);
+});
+
+const journey=(level=1,mistakes=0,seed=42)=>{
+  const game=createGame(level,seed),wrong=game.marks.findIndex((_,i)=>!isTarget(game,i));
+  const targets=game.marks.flatMap((mark,i)=>mark!==2&&isTarget(game,i)?[i]:[]);
+  return {version:'journey-v1',day,level,seed,finds:[...Array(mistakes).fill(wrong),...targets]};
+};
+test('journey completion derives hearts from replay, including reveals and valid revives',()=>{
+  for(const level of [1,4,7,13,23,33])for(let mistakes=0;mistakes<3;mistakes++)assert.equal(validateJourneyCompletion(journey(level,mistakes)).hearts,3-mistakes);
+  const revived=journey(),wrong=createGame(1,42).marks.findIndex((_,i)=>!isTarget(createGame(1,42),i));
+  revived.finds=[wrong,wrong,wrong,-1,...revived.finds];assert.equal(validateJourneyCompletion(revived).hearts,1);
+  for(const value of [{level:0},{level:1000001},{level:1.5},{seed:-1},{seed:2**32},{version:'old'},{finds:null},{finds:[]},{finds:Array(513).fill(0)},{finds:[-2]},{finds:[1000]},{finds:[1.1]},{finds:[-1]}, {finds:[wrong,wrong,wrong,...journey().finds]}, {finds:[...journey().finds,wrong]}, {finds:[journey().finds[0]]}, {finds:[journey().finds[0],journey().finds[0]]}])assert.throws(()=>validateJourneyCompletion({...journey(),...value}));
+});
+test('daily journey hearts add once per level, share ranks on ties, and reset at UTC midnight',async()=>{
+  const f=fixture(),a=await register(f,'Amber'),b=await register(f,'Birch');
+  assert.equal((await f.call('journey/finish',{body:journey()})).statusCode,401);
+  const finish=(player,body)=>f.call('journey/finish',{player,body});
+  let result=await finish(a,{...journey(1,1),hearts:999});assert.equal(result.data.hearts,2);assert.equal(result.data.mine.hearts,2);
+  assert.equal((await finish(a,journey(1))).data.credited,false);
+  await finish(a,journey(2));await finish(b,journey(1));await finish(b,journey(2,1));
+  let board=(await f.call('hearts',{player:a})).data;
+  assert.deepEqual(board.entries.map(entry=>entry.rank),[1,1]);assert.equal(board.mine.hearts,5);assert.equal(board.mine.levels,2);
+  await f.call('profile',{method:'PUT',player:a,body:{name:'Fern'}});assert.equal((await f.call('hearts',{player:a})).data.mine.name,'Fern');
+  assert.equal((await f.call('hearts?day=2026-10-28')).statusCode,400);
+  assert.equal((await finish(a,{...journey(),day:'2026-10-26'})).statusCode,410);
+  assert.equal((await finish(a,{...journey(),finds:[]})).statusCode,400);
+  f.advance(24*3600000);assert.equal((await f.call('hearts')).data.total,0);
+  assert.equal((await finish(a,{...journey(),day:'2026-10-28'})).data.credited,false,'replaying a level on a later day gives no extra hearts');
+  await finish(a,{...journey(3),day:'2026-10-28'});board=(await f.call('hearts',{player:a})).data;
+  assert.equal(board.mine.hearts,3);assert.equal(board.mine.levels,1);
+  assert.equal((await f.call('hearts?day='+day,{player:a})).data.mine.hearts,5);
 });

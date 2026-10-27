@@ -41,3 +41,32 @@ test('DynamoDB transactions preserve one best score through retries and concurre
     assert.ok(improves({elapsedMs:100,mistakes:0},{elapsedMs:100,mistakes:1}));assert.ok(rankKey({elapsedMs:9,mistakes:0,finishedAt:1,playerId:'a'})<rankKey({elapsedMs:10,mistakes:0,finishedAt:1,playerId:'a'}));
   }finally{await client.send(new DeleteTableCommand({TableName:table}));client.destroy();}
 });
+
+test('journey hearts are atomic, deduplicate across days, and share ranks outside the top 50',{skip:!endpoint,timeout:90000},async()=>{
+  const url=new URL(endpoint);assert.ok(['localhost','127.0.0.1'].includes(url.hostname));
+  const client=new DynamoDBClient({endpoint,region:'us-east-1',credentials:{accessKeyId:'LOCALTESTONLY',secretAccessKey:'LOCALTESTONLY'}}),document=DynamoDBDocumentClient.from(client),table='firefly-hearts-'+randomUUID();
+  await client.send(new CreateTableCommand({TableName:table,BillingMode:'PAY_PER_REQUEST',AttributeDefinitions:[{AttributeName:'pk',AttributeType:'S'},{AttributeName:'sk',AttributeType:'S'}],KeySchema:[{AttributeName:'pk',KeyType:'HASH'},{AttributeName:'sk',KeyType:'RANGE'}]}));
+  try{
+    await waitUntilTableExists({client,maxWaitTime:30},{TableName:table});const store=new DynamoStore(table,document),day='2026-10-27';
+    const player=async name=>{const id=randomUUID();await store.createPlayer({id,name,tokenHash:hash(id),createdAt:1});return id;};
+    const a=await player('Amber'),b=await player('Birch'),c=await player('Cricket');
+    const finish=(playerId,level,hearts=3,date=day)=>store.finishJourney({playerId,level,hearts,day:date});
+    const same=await Promise.all([finish(a,1),finish(a,1)]);assert.equal(same.filter(result=>result.credited).length,1);
+    await Promise.all([finish(a,2,2),finish(a,3,1)]);
+    let board=await store.heartsBoard(day,a);assert.equal(board.mine.hearts,6);assert.equal(board.mine.levels,3);assert.equal(board.total,1);
+    await finish(b,1);await finish(b,2);board=await store.heartsBoard(day,b);
+    assert.deepEqual(board.entries.map(row=>row.rank),[1,1]);assert.equal(board.mine.hearts,6);
+    await finish(a,4,1);await store.rename(a,'Fern');board=await store.heartsBoard(day,a);
+    assert.equal(board.mine.name,'Fern');assert.equal(board.mine.hearts,7);assert.equal(board.entries[1].rank,2);
+    assert.equal((await finish(a,1,3,'2026-10-28')).credited,false);assert.equal((await store.heartsBoard('2026-10-28')).total,0);
+    await finish(a,5,2,'2026-10-28');assert.equal((await store.heartsBoard('2026-10-28',a)).mine.hearts,2);
+    let last;
+    for(let i=0;i<50;i++){last=await player('Firefly '+i);await finish(last,1);}
+    await finish(c,1,1);board=await store.heartsBoard(day,c);
+    assert.equal(board.entries.length,50);assert.equal(board.total,53);assert.equal(board.mine.rank,53);
+    assert.equal((await store.heartsBoard(day,last)).mine.rank,3,'ties share rank even when a player is outside the top 50');
+    assert.equal((await store.heartsBoard(day)).mine,null);
+    const rows=await store.queryAll({KeyConditionExpression:'pk=:day AND begins_with(sk,:prefix)',ExpressionAttributeValues:{':day':'HEARTDAY#'+day,':prefix':'HEARTS#'}});
+    assert.equal(rows.length,53,'superseded totals leave no stale ranking entries');
+  }finally{await client.send(new DeleteTableCommand({TableName:table}));client.destroy();}
+});

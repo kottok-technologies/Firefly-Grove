@@ -1,5 +1,6 @@
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {createDailyGame,dailyKey} from './daily.js';
+import {validateJourneyCompletion} from './journey.mjs';
 export class ApiError extends Error{constructor(status,message){super(message);this.status=status;}}
 export const hash=value=>createHash('sha256').update(value).digest('hex');
 export function normalizeName(name){
@@ -27,7 +28,7 @@ export function createHandler(store,{now=()=>Date.now()}={}){
       const method=event.requestContext?.http?.method||event.httpMethod,path=(event.rawPath||event.path||'').replace(/\/$/,'');
       if(method==='OPTIONS')return {statusCode:204,headers,body:''};
       const time=now(),today=dailyKey(new Date(time));
-      if(path==='/api/v1/health'&&method==='GET')return respond({ok:true,version:'speed-v1',day:today,provider:'aws'});
+      if(path==='/api/v1/health'&&method==='GET')return respond({ok:true,version:'speed-v1',day:today,provider:'aws',journeyHearts:'journey-v1'});
       const body=()=>{
         const contentType=event.headers?.['content-type']||event.headers?.['Content-Type']||'';
         if(!contentType.startsWith('application/json'))throw new ApiError(415,'Send JSON data.');
@@ -42,12 +43,12 @@ export function createHandler(store,{now=()=>Date.now()}={}){
         if(!player&&required)throw new ApiError(401,'Create a player profile to race online.');return player;
       };
       const ipHash=hash(event.requestContext?.http?.sourceIp||'unknown');
-      if(path==='/api/v1/leaderboard'&&method==='GET'){
+      if(['/api/v1/leaderboard','/api/v1/hearts'].includes(path)&&method==='GET'){
         const day=event.queryStringParameters?.day||today;
         if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day+'T00:00:00Z'))||dailyKey(new Date(day+'T00:00:00Z'))!==day||day>today||Date.parse(day+'T00:00:00Z')<Date.parse(today+'T00:00:00Z')-90*86400000)throw new ApiError(400,'Choose a UTC date within the last 90 days.');
         const player=await authenticate(false);
         await limit('read:'+(player?.id||ipHash),180,60000);
-        return respond(await store.board(day,player?.id));
+        return respond(path==='/api/v1/hearts'?await store.heartsBoard(day,player?.id):await store.board(day,player?.id));
       }
       if(path==='/api/v1/players'&&method==='POST'){
         await limit('register:'+ipHash,10,3600000);
@@ -55,6 +56,14 @@ export function createHandler(store,{now=()=>Date.now()}={}){
         await store.createPlayer({id,name,tokenHash:hash(token),createdAt:time});return respond({...playerView({id,name}),token},201);
       }
       const player=await authenticate();
+      if(path==='/api/v1/journey/finish'&&method==='POST'){
+        await limit('journey-finish:'+player.id,120,60000);
+        const input=body();
+        if(input.day!==today)throw new ApiError(410,'Hearts must upload on the UTC day the level was completed.');
+        const completion=validateJourneyCompletion(input);
+        const result=await store.finishJourney({...completion,playerId:player.id,day:today});
+        return respond({...result,day:today,...await store.heartsBoard(today,player.id)});
+      }
       if(path==='/api/v1/profile'&&method==='GET')return respond(playerView(player));
       if(path==='/api/v1/profile'&&method==='PUT'){
         await limit('rename:'+player.id,10,3600000);const name=normalizeName(body().name);await store.rename(player.id,name);return respond(playerView({...player,name}));

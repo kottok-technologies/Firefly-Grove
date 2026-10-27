@@ -8,6 +8,10 @@ const runKey=(playerId,id)=>({pk:'PLAYER#'+playerId,sk:'RUN#'+id});
 const activeKey=id=>({pk:'PLAYER#'+id,sk:'ACTIVE'});
 const bestKey=(day,id)=>({pk:'DAY#'+day,sk:'PLAYER#'+id});
 const expiry=day=>Math.floor(Date.parse(day+'T00:00:00Z')/1000)+92*86400;
+const heartPartition=day=>'HEARTDAY#'+day;
+const heartPlayerKey=(day,id)=>({pk:heartPartition(day),sk:'PLAYER#'+id});
+const heartPrefix=hearts=>'HEARTS#'+String(9999999999-hearts).padStart(10,'0');
+const heartRankKey=(hearts,id)=>heartPrefix(hearts)+'#'+id;
 export class DynamoStore{
   constructor(tableName,client=DynamoDBDocumentClient.from(new DynamoDBClient({}),{marshallOptions:{removeUndefinedValues:true}})){this.tableName=tableName;this.client=client;}
   send(Command,input){return this.client.send(new Command({TableName:this.tableName,...input}));}
@@ -55,6 +59,44 @@ export class DynamoStore{
     }
   }
   async queryAll(input){const rows=[];let cursor;do{const page=await this.send(QueryCommand,{...input,ExclusiveStartKey:cursor,ConsistentRead:true});rows.push(...(page.Items||[]));cursor=page.LastEvaluatedKey;}while(cursor);return rows;}
+  async finishJourney(completion){
+    const {playerId,day,level,hearts}=completion;
+    const receiptKey={pk:'PLAYER#'+playerId,sk:'HEART_LEVEL#'+level};
+    for(let attempt=0;attempt<5;attempt++){
+      const receipt=await this.get(receiptKey);
+      if(receipt)return {credited:false,hearts:receipt.hearts,level};
+      const previous=await this.get(heartPlayerKey(day,playerId));
+      const total=(previous?.hearts||0)+hearts,rankKey=heartRankKey(total,playerId);
+      const score={playerId,day,hearts:total,levels:(previous?.levels||0)+1,rankKey,expires:expiry(day)};
+      const transact=[
+        {Put:{TableName:this.tableName,Item:{...receiptKey,...completion},ConditionExpression:'attribute_not_exists(pk)'}},
+        {Put:{TableName:this.tableName,Item:{...heartPlayerKey(day,playerId),...score},ConditionExpression:previous?'rankKey=:previous':'attribute_not_exists(pk)',...(previous?{ExpressionAttributeValues:{':previous':previous.rankKey}}:{})}},
+        {Put:{TableName:this.tableName,Item:{pk:heartPartition(day),sk:rankKey,...score}}}
+      ];
+      if(previous)transact.push({Delete:{TableName:this.tableName,Key:{pk:heartPartition(day),sk:previous.rankKey}}});
+      else transact.push({Update:{TableName:this.tableName,Key:{pk:heartPartition(day),sk:'META'},UpdateExpression:'SET expires=:expires ADD #count :one',ExpressionAttributeNames:{'#count':'count'},ExpressionAttributeValues:{':one':1,':expires':expiry(day)}}});
+      try{await this.send(TransactWriteCommand,{TransactItems:transact});return {credited:true,hearts,level};}
+      catch(error){if(!['TransactionCanceledException','TransactionConflictException'].includes(error.name)||attempt===4)throw error;await new Promise(resolve=>setTimeout(resolve,20*(attempt+1)));}
+    }
+  }
+  async heartsBoard(day,playerId){
+    const [top,meta,mine]=await Promise.all([
+      this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND begins_with(sk,:prefix)',ExpressionAttributeValues:{':day':heartPartition(day),':prefix':'HEARTS#'},Limit:50,ConsistentRead:true}),
+      this.get({pk:heartPartition(day),sk:'META'}),playerId?this.get(heartPlayerKey(day,playerId)):null
+    ]);
+    const rows=top.Items||[],ids=[...new Set([...rows.map(row=>row.playerId),...(mine?[mine.playerId]:[])])];
+    const names=await this.playerNames(ids);
+    const view=(row,rank)=>({rank,name:names.get(row.playerId)||'Firefly',tag:row.playerId.slice(0,4).toUpperCase(),hearts:row.hearts,levels:row.levels,isYou:row.playerId===playerId});
+    let rank=1;
+    const entries=rows.map((row,index)=>{if(index&&row.hearts!==rows[index-1].hearts)rank=index+1;return view(row,rank);});
+    let own=entries.find(entry=>entry.isYou)||null;
+    if(mine&&!own){
+      let count=0,cursor;
+      do{const page=await this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND sk BETWEEN :prefix AND :key',ExpressionAttributeValues:{':day':heartPartition(day),':prefix':'HEARTS#',':key':heartPrefix(mine.hearts)},Select:'COUNT',ConsistentRead:true,ExclusiveStartKey:cursor});count+=page.Count;cursor=page.LastEvaluatedKey;}while(cursor);
+      own=view(mine,count+1);
+    }
+    return {day,total:meta?.count||0,entries,mine:own};
+  }
   async rank(day,key){
     let count=0,cursor;do{const page=await this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND sk BETWEEN :prefix AND :key',ExpressionAttributeValues:{':day':'DAY#'+day,':prefix':'SCORE#',':key':key},Select:'COUNT',ConsistentRead:true,ExclusiveStartKey:cursor});count+=page.Count;cursor=page.LastEvaluatedKey;}while(cursor);return count;
   }
@@ -63,7 +105,13 @@ export class DynamoStore{
       this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND begins_with(sk,:prefix)',ExpressionAttributeValues:{':day':'DAY#'+day,':prefix':'SCORE#'},Limit:50,ConsistentRead:true}),
       this.get({pk:'DAY#'+day,sk:'META'}),playerId?this.get(bestKey(day,playerId)):null
     ]);
-    const rows=top.Items||[],ids=[...new Set([...rows.map(row=>row.playerId),...(mine?[mine.playerId]:[])])],names=new Map();
+    const rows=top.Items||[],ids=[...new Set([...rows.map(row=>row.playerId),...(mine?[mine.playerId]:[])])],names=await this.playerNames(ids);
+    const view=(row,rank)=>({rank,name:names.get(row.playerId)||'Firefly',tag:row.playerId.slice(0,4).toUpperCase(),elapsedMs:row.elapsedMs,mistakes:row.mistakes,isYou:row.playerId===playerId});
+    const position=mine?(rows.findIndex(row=>row.playerId===playerId)+1||await this.rank(day,mine.rankKey)):0;
+    return {day,total:meta?.count||0,entries:rows.map((row,index)=>view(row,index+1)),mine:mine?view(mine,position):null};
+  }
+  async playerNames(ids){
+    const names=new Map();
     let pending=ids.map(playerKey);
     for(let attempt=0;pending.length&&attempt<4;attempt++){
       const result=await this.client.send(new BatchGetCommand({RequestItems:{[this.tableName]:{Keys:pending,ConsistentRead:true}}}));
@@ -72,8 +120,6 @@ export class DynamoStore{
       if(pending.length)await new Promise(resolve=>setTimeout(resolve,30*(attempt+1)));
     }
     if(pending.length)throw Error('Profile lookup throttled');
-    const view=(row,rank)=>({rank,name:names.get(row.playerId)||'Firefly',tag:row.playerId.slice(0,4).toUpperCase(),elapsedMs:row.elapsedMs,mistakes:row.mistakes,isYou:row.playerId===playerId});
-    const position=mine?(rows.findIndex(row=>row.playerId===playerId)+1||await this.rank(day,mine.rankKey)):0;
-    return {day,total:meta?.count||0,entries:rows.map((row,index)=>view(row,index+1)),mine:mine?view(mine,position):null};
+    return names;
   }
 }

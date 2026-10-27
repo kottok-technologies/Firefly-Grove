@@ -90,3 +90,11 @@ Deployment status: AWS is the production backend and its Terraform bootstrap is 
 ## Persistent Android release signing
 
 Local and CI distribution builds share a persistent signing key. Successful main-branch CI produces a connected release APK and a Play upload bundle; pull requests only produce development builds. See [Android signing](docs/ANDROID_SIGNING.md) for local builds, key backup, certificates, and migration from debug APKs.
+
+## Daily hearts leaderboard
+
+Regular journey levels now contribute their remaining 1–3 hearts to a shared daily leaderboard. It resets at 00:00 UTC, independently of the daily speed challenge. Every level can contribute once per player, including across later ranking days. Equal heart totals share a rank; the board shows the top 50 and your own rank, with a date selector for the last 90 days. Names come from the existing player profile and can be changed in Settings.
+
+The app records find attempts, tool reveals, and life restores. The server regenerates the puzzle and replays that history to calculate hearts instead of trusting a claimed total. Tools and valid life restores remain available. In-progress puzzles migrate their current finds and mistakes; earlier completed levels are not imported retroactively. Offline completions queue on the device, retry when connected, and must upload on the same UTC day they finish. They never roll into the next day’s ranking. Server transactions prevent duplicated or lost points from retries and concurrent completions.
+
+API additions: `GET /api/v1/hearts?day=YYYY-MM-DD` and authenticated `POST /api/v1/journey/finish` (`version: journey-v1`, completion day, level, seed, and find history). Existing Lambda/DynamoDB resources and runtime permissions are reused. Receipts are permanent per player/level; daily totals expire after 92 days. Logical completion validation is not strong bot protection, since the deterministic puzzle engine is distributed with the app.
