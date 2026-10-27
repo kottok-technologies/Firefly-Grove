@@ -6,6 +6,7 @@ import { cellsAlongSegment, paintNotes } from './gestures.js';
 import {dailyKey,createDailyGame,beginDailyRun,dailyElapsed,freezeDailyRun,recordDailyResult,formatSpeed} from './daily.js';
 const $ = id => document.getElementById(id);
 const STORAGE = 'firefly-grove-v1';
+const DOUBLE_TAP_MS = 600;
 const palette = ['#d9e5ba','#e6c2a9','#c6dcd6','#e7d9a4','#cfc9e2','#b8d4ac','#e4c7ce','#bfcde0','#e3c49a','#c1dfc2','#d7d3ac','#c9bee0','#dbbcae','#b8d9dd'];
 const fly = '<span class="firefly-arrival"><svg class="firefly-sprite" viewBox="0 0 48 48" aria-hidden="true"><g class="firefly-wings"><path d="M22 24C4 28 6 7 16 13c5 3 7 8 8 13C25 8 41 8 38 20c-2 8-9 8-14 6" fill="#faf9dc" stroke="#567344" stroke-width="1.5"/></g><ellipse cx="24" cy="31" rx="7" ry="10" fill="#38593c"/><ellipse class="firefly-light" cx="24" cy="35" rx="5" ry="5" fill="#e7d985"/><circle cx="24" cy="22" r="5" fill="#38593c"/><path d="m22 19-4-5m8 5 4-5" stroke="#38593c" stroke-width="1.5" stroke-linecap="round"/></svg></span>';
 const cross = '<svg class="cross-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round"><g stroke="#fffdec" stroke-width="6"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g><g stroke="#234536" stroke-width="3.5"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g></svg>';
@@ -74,7 +75,7 @@ function dialog(name,values){cancelTap();cancelDrag();stopIdle();renderDialog($(
 function close(){modal.close();tick=Date.now();scheduleIdle();}
 $('close-modal').onclick=()=>{if(!isPlaying||!game||game.lives>0)close();};
 modal.addEventListener('cancel',e=>{if(isPlaying&&game?.lives<=0)e.preventDefault();});
-function cancelTap(){if(pendingTap){clearTimeout(pendingTap.timer);pendingTap=null;}}
+function cancelTap(){pendingTap=null;}
 function cancelDrag(){
   const previous=drag;drag=null;
   $('board').classList.remove('dragging');
@@ -238,8 +239,6 @@ $('board').addEventListener('pointerdown',e=>{
   suppressDragClick=false;
   const cell=e.target.closest('[data-cell]');if(!cell)return;
   const i=Number(cell.dataset.cell);if(game.marks[i]===2)return;
-  // A prior tap on another cell should still count when the next stroke starts.
-  if(pendingTap&&pendingTap.i!==i){const previous=pendingTap.i;cancelTap();move(previous,false);}
   const point={x:e.clientX,y:e.clientY};
   drag={id:e.pointerId,type:e.pointerType,start:point,last:point,mark:game.marks[i]===1?0:1,visited:new Set(),active:false,changed:false};
 });
@@ -266,11 +265,20 @@ $('board').addEventListener('lostpointercapture',e=>{if(e.target===$('board')&&d
 window.addEventListener('blur',()=>{cancelTap();cancelDrag();});
 $('board').addEventListener('click',e=>{
   if(suppressDragClick&&e.detail!==0){suppressDragClick=false;return;}
-  const cell=e.target.closest('[data-cell]');if(!cell||busy||modal.open)return;const i=Number(cell.dataset.cell);
+  const cell=e.target.closest('[data-cell]');
+  if(!cell||!isPlaying||busy||modal.open||!game||game.completed||game.lives<=0)return;
+  const i=Number(cell.dataset.cell);
   if(e.detail===0){cancelTap();move(i,e.shiftKey);return;}
-  if(pendingTap?.i===i){cancelTap();move(i,true);return;}
-  if(pendingTap){const prev=pendingTap.i;cancelTap();move(prev,false);if(modal.open)return;}
-  pendingTap={i,timer:setTimeout(()=>{pendingTap=null;move(i,false);},320)};
+  if(game.marks[i]===2){cancelTap();return;}
+  const now=performance.now();
+  if(pendingTap?.i===i&&now-pendingTap.at<=DOUBLE_TAP_MS){
+    // The first tap was shown immediately. A second tap converts that gesture
+    // into a find attempt, preserving the original note if the find is wrong.
+    game.marks[i]=pendingTap.before;
+    cancelTap();move(i,true);return;
+  }
+  pendingTap={i,at:now,before:game.marks[i]};
+  move(i,false);
 });
 $('board').addEventListener('dblclick',e=>e.preventDefault());
 $('board').addEventListener('animationend',e=>{
