@@ -11,7 +11,7 @@ The small Lambda ZIP uploads directly through Terraform. The old CloudFormation 
 
 Configuration, provider validation, mocked security tests and a local high/critical Trivy scan pass. Bootstrap was applied on **2026-10-27** in us-east-1: **15 resources created, no changes or deletions**, reusing the account's existing GitHub OIDC provider. The seven non-secret GitHub variables are configured, and the production environment requires owner review and restricts deployments to main. **The leaderboard application has not been deployed.**
 
-Deployment is also gated on successful CI, successful CodeQL analysis, and no open high/critical CodeQL alerts. The existing Sites dependency audit and open high CodeQL finding must be resolved/reviewed before the application can deploy. Nothing bypasses those gates.
+Deployment is also gated on successful CI, successful CodeQL analysis, and no open high/critical CodeQL alerts. The retired Sites prototype no longer contributes dependencies. CodeQL findings must be fixed or reviewed as documented in `docs/SECURITY_REVIEW.md` before the application can deploy. Nothing bypasses those gates.
 
 ## One-time bootstrap (operator)
 

@@ -1,3 +1,4 @@
+import {renderDialog} from './dialogs.js';
 import {raceApi,LEADERBOARD_ORIGIN} from './leaderboard-client.js';
 import { createGame, applyMove, findHint, isTarget, levelConfig } from './engine.js';
 import { cellsAlongSegment, paintNotes } from './gestures.js';
@@ -67,7 +68,7 @@ function message(text,colors=[]){
   }
   paragraph.append(document.createTextNode(text));
 }
-function dialog(html){cancelTap();cancelDrag();stopIdle();$('modal-content').innerHTML=html;if(!modal.open)modal.showModal();}
+function dialog(name,values){cancelTap();cancelDrag();stopIdle();renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();}
 function close(){modal.close();tick=Date.now();scheduleIdle();}
 $('close-modal').onclick=()=>{if(!isPlaying||!game||game.lives>0)close();};
 modal.addEventListener('cancel',e=>{if(isPlaying&&game?.lives<=0)e.preventDefault();});
@@ -124,7 +125,7 @@ $('daily-play').onclick=()=>{
   if(busy)return;
   const day=dailyKey(),run=state.dailyRun;
   if(run?.dailyDay===day&&run.startedAt!==null&&!run.completed&&run.lives>0){enterDaily(day);return;}
-  dialog('<div class="modal-symbol">◷</div><h2>A little race against time.</h2><p>Today’s shared <b>8 × 8</b> puzzle has no starter fireflies. Find all eight as quickly as you can.</p><ul><li>Three lives. No hints, reveals, automatic crosses, or ad revives.</li><li>Online races use the server clock from start to finish, including network travel. The clock keeps running if you leave.</li><li>Restart freely. Online races publish your nickname and best time; offline practice saves a personal best on this device.</li><li>A fresh puzzle arrives at 00:00 UTC. Regular levels and tools stay separate.</li></ul><button class="primary" id="daily-start">Start the clock →</button>');
+  dialog('dailyIntro');
   $('daily-start').onclick=()=>{close();enterDaily(dailyKey(),true);};
   const ranked=document.createElement('button');ranked.className='primary';ranked.textContent='Race online →';ranked.onclick=()=>chooseProfile(()=>{close();enterDaily(dailyKey(),true,true);});$('daily-start').before(ranked);$('daily-start').textContent='Practice offline';$('daily-start').className='secondary';
 };
@@ -144,16 +145,16 @@ async function newDailyRun(day,ranked=!!game?.online){
       const ticket=await raceApi('runs',{method:'POST',profile:state.leaderboardProfile,body:{day,version:'speed-v1'}});
       if(ticket.day!==day||ticket.seed!==game.seed||ticket.size!==game.size)throw Error('Puzzle version mismatch. Update the app to race online.');
       game.online={runId:ticket.id,profileId:state.leaderboardProfile.id,status:'active'};game.rankedFinds=[];
-    }catch(error){busy=false;$('loading').hidden=true;game=null;dialog('<h2>Could not start the race.</h2><p id="race-error"></p><button class="primary" id="race-home">Back to home</button>');$('race-error').textContent=error.message;$('race-home').onclick=showHome;return;}
+    }catch(error){busy=false;$('loading').hidden=true;game=null;dialog('raceStartError');$('race-error').textContent=error.message;$('race-home').onclick=showHome;return;}
   }
   if(isPlaying)beginDailyRun(game);
   finishLoad();message('The clock is running. Find all eight fireflies—no tools, just your logic.');
 }
 $('message-details').onclick=()=>{
-  dialog('<div class="modal-symbol">✧</div><h2>A little guidance.</h2><p id="full-explanation"></p>');
+  dialog('hintDetails');
   $('full-explanation').textContent=lastMessage.text;
 };
-$('care-package').onclick=()=>dialog(`<div class="modal-symbol">♧</div><h2>A little care package.</h2><p>Every five completed levels earns <b>2 hints and 1 firefly reveal</b>. Rewards are added automatically.</p><p>You have completed ${state.completed} levels. ${5-state.completed%5} more to your next package.</p><p>Hints explain a rule and mark its affected cells. Reveals uncover one hidden firefly. Restarting a puzzle never spends a tool.</p>`);
+$('care-package').onclick=()=>dialog('carePackage',{progress:`You have completed ${state.completed} levels. ${5-state.completed%5} more to your next package.`});
 new ResizeObserver(([entry])=>{
   const side=Math.floor(Math.min(entry.contentRect.width,entry.contentRect.height));
   $('board-wrap').style.width=`${Math.max(0,side)}px`;
@@ -285,14 +286,15 @@ $('board').addEventListener('contextmenu',e=>{
 });
 function win(){
   if(mode==='daily'){winDaily();return;}
-  state.completed++;state.level++;let reward='';
-  if(state.completed%5===0){state.hints+=2;state.reveals++;reward='<p>A care package for you: <b>+2 hints and +1 reveal</b>.</p>';}
+  state.completed++;state.level++;let reward=false;
+  if(state.completed%5===0){state.hints+=2;state.reveals++;reward=true;}
   save();render();
   const completedGame=game;
   // Let the last firefly finish arriving before covering the board.
   setTimeout(()=>{
     if(!isPlaying||game!==completedGame)return;
-    dialog(`<div class="modal-symbol">✦</div><div class="eyebrow">A LITTLE MORE LIGHT</div><h2>The grove is glowing.</h2><p>Every firefly found its home. Level ${game.level} complete in ${$('time').textContent}, with ${game.mistakes} ${game.mistakes===1?'mistake':'mistakes'}.</p>${reward}<button class="primary" id="next-level">Wander to level ${state.level} →</button>`);
+    dialog('journeyWin',{details:`Every firefly found its home. Level ${game.level} complete in ${$("time").textContent}, with ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}.`,next:`Wander to level ${state.level} →`});
+    $('win-reward').hidden=!reward;
     $('next-level').onclick=()=>{close();newLevel();};
   },reducedMotion.matches?0:740);
 }
@@ -302,7 +304,7 @@ function winDaily(){
   if(completedGame.online)submitRace(completedGame);
   setTimeout(()=>{
     if(!isPlaying||game!==completedGame)return;
-    dialog(`<div class="modal-symbol">◷</div><div class="eyebrow">DAILY SPEED CHALLENGE</div><h2>${result.improved?'A new personal best!':'Daily complete.'}</h2><p class="daily-result-time">${formatSpeed(game.elapsedMs)}</p><p>${game.dailyDay} · ${game.mistakes} ${game.mistakes===1?'mistake':'mistakes'}<br>Your best: <b>${formatSpeed(result.bestMs)}</b></p><p>Regular levels and tool balances are unchanged. Replay this same puzzle to improve your time.</p><button class="primary" id="daily-again">Race again</button><button class="secondary" id="daily-home">Back to home</button>`);
+    dialog('dailyWin',{title:result.improved?"A new personal best!":"Daily complete.",time:formatSpeed(game.elapsedMs),details:`${game.dailyDay} · ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}`,best:formatSpeed(result.bestMs)});
     $('daily-again').onclick=()=>{close();newDailyRun(completedGame.dailyDay);};
     $('daily-home').onclick=showHome;
     const status=document.createElement('p');status.id='race-status';status.setAttribute('aria-live','polite');$('daily-again').before(status);
@@ -312,14 +314,15 @@ function winDaily(){
 }
 function showLoss(){
   if(mode==='daily'){
-    dialog(`<div class="modal-symbol">♡</div><h2>A fresh run?</h2><p>You used all three lives in ${formatSpeed(game.elapsedMs)}. Restart the same daily puzzle for free with a fresh clock. Failed runs do not change your best.</p><button class="primary" id="retry">Restart daily · Free</button><button class="secondary" id="daily-loss-home">Back to home</button>`);
+    dialog('dailyLoss',{details:`You used all three lives in ${formatSpeed(game.elapsedMs)}. Restart the same daily puzzle for free with a fresh clock. Failed runs do not change your best.`});
     $('retry').onclick=()=>{close();newDailyRun(game.dailyDay);};$('daily-loss-home').onclick=showHome;return;
   }
-  dialog('<div class="modal-symbol">♡</div><h2>A moment to begin again.</h2><p>Your three lives are used. Restart this same puzzle for free, or choose a reward video to restore one life.</p><button class="primary" id="retry">Restart level · Free</button><button class="secondary" id="revive">Get one life · Optional video</button>');$('retry').onclick=()=>{close();newLevel(true);};$('revive').onclick=()=>offerReward('life');
+  dialog('journeyLoss');$('retry').onclick=()=>{close();newLevel(true);};$('revive').onclick=()=>offerReward('life');
 }
 function offerReward(kind){
-  const native=!!window.AndroidRewards;
-  dialog(`<div class="modal-symbol">${kind==='life'?'♡':'✧'}</div><h2>A little helping hand.</h2><p>${kind==='life'?'Restore one life':kind==='hints'?'Add one hint':'Add one firefly reveal'} with an optional reward video. You can always keep playing and earn tools every five completed levels.</p><p class="reward-note">${native?'Reward videos are unavailable until an ad provider is configured for this Android build.':'Browser preview: this is a simulated reward. No real advertisement will play.'}</p>${native?'':'<button class="primary" id="preview-reward">Try preview reward</button>'}<button class="secondary" id="reward-back">${game?.lives===0?'Back to restart':'Back to the grove'}</button>`);
+  const native=location.origin==='https://appassets.androidplatform.net';
+  dialog('reward',{symbol:kind==="life"?"♡":"✧",details:`${kind==="life"?"Restore one life":kind==="hints"?"Add one hint":"Add one firefly reveal"} with an optional reward video. You can always keep playing and earn tools every five completed levels.`,note:native?"Reward videos are unavailable until an ad provider is configured for this Android build.":"Browser preview: this is a simulated reward. No real advertisement will play.",back:game?.lives===0?"Back to restart":"Back to the grove"});
+  $('preview-reward').hidden=native;
   if(!native)$('preview-reward').onclick=()=>{if(kind==='life')game.lives=1;else state[kind]++;save();render();close();message(kind==='life'?'One life restored. Take your time.':'Your preview reward is ready. Select the tool to use it.');};
   $('reward-back').onclick=()=>{if(isPlaying&&game?.lives===0)showLoss();else close();};
 }
@@ -332,12 +335,13 @@ function tool(kind){
   state[kind]--;for(const i of hint.cells)applyMove(game,i,hint.target);autoCross();render();message(hint.text,hint.colors);hint.cells.forEach(i=>$('board').children[i].classList.add('flash'));save();if(game.completed)win();
 }
 $('hint').onclick=()=>tool('hints');$('reveal').onclick=()=>tool('reveals');
-$('restart').onclick=()=>{if(!game||busy)return;dialog(`<div class="modal-symbol">↻</div><h2>A fresh look?</h2><p>${mode==='daily'?'Restart the same daily puzzle with three lives and a fresh clock. Your personal best stays saved. The current clock keeps running until you restart.':'Restart this puzzle with three lives. Your used tools stay spent. Restarting is always free.'}</p><button class="primary" id="confirm-restart">${mode==='daily'?'Restart daily':'Restart level'}</button><button class="secondary" id="keep-playing">Keep playing</button>`);$('confirm-restart').onclick=()=>{close();if(game.completed){newLevel();}else newLevel(true);};$('keep-playing').onclick=close;};
-$('help').onclick=()=>dialog('<div class="modal-symbol">✦</div><h2>Follow the little lights.</h2><ul><li>Find exactly one firefly in each row, each column, and each colored region.</li><li>Fireflies cannot touch, including diagonally.</li><li>Tap once to add a cross and tap again to erase it. Crosses are notes and never cost a life.</li><li>Drag from an unmarked cell to paint crosses, or start on a cross to erase them. Revealed fireflies stay protected.</li><li>Double-tap to find a firefly, even on a crossed cell.</li><li>Only an incorrect firefly placement costs one of three lives.</li><li>The full grid fits on one screen. Use the back arrow to return home for settings and care package details.</li></ul><p>Hints explain a proven move. Reveals find a firefly. Earn 2 hints and 1 reveal every 5 levels. Small dots mark starter fireflies.</p>');
+$('restart').onclick=()=>{if(!game||busy)return;dialog('restart',{details:mode==="daily"?"Restart the same daily puzzle with three lives and a fresh clock. Your personal best stays saved. The current clock keeps running until you restart.":"Restart this puzzle with three lives. Your used tools stay spent. Restarting is always free.",restart:mode==="daily"?"Restart daily":"Restart level"});$('confirm-restart').onclick=()=>{close();if(game.completed){newLevel();}else newLevel(true);};$('keep-playing').onclick=close;};
+$('help').onclick=()=>dialog('help');
 $('settings').onclick=()=>{
-  dialog(`<div class="modal-symbol">❋</div><h2>Make yourself at home.</h2><label class="setting">Automatically cross ruled-out cells<input id="auto-cross" type="checkbox" ${state.settings.autoCross?'checked':''}></label><label class="setting">Gentle vibration on mistakes<input id="haptics" type="checkbox" ${state.settings.haptics?'checked':''}></label><p>Tap to cross, double-tap to find. Your game is saved on this device and works offline after its first visit.</p><button class="secondary" id="more-tools">Optional tool rewards</button>`);
+  dialog('settings');
+  $('auto-cross').checked=!!state.settings.autoCross;$('haptics').checked=!!state.settings.haptics;
   for(const [id,key]of[['auto-cross','autoCross'],['haptics','haptics']])$(id).onchange=e=>{state.settings[key]=e.target.checked;save();render();};
-  $('more-tools').onclick=()=>{dialog('<div class="modal-symbol">✧</div><h2>A little extra help.</h2><p>Care packages arrive every five levels. You can also choose an optional reward.</p><button class="primary" id="extra-hint">Get a hint</button><button class="secondary" id="extra-reveal">Get a firefly reveal</button>');$('extra-hint').onclick=()=>offerReward('hints');$('extra-reveal').onclick=()=>offerReward('reveals');};
+  $('more-tools').onclick=()=>{dialog('moreTools');$('extra-hint').onclick=()=>offerReward('hints');$('extra-reveal').onclick=()=>offerReward('reveals');};
 };
 setInterval(()=>{const now=Date.now();if(mode==='journey'&&isPlaying&&game&&!busy&&!game.completed&&game.lives>0&&!document.hidden&&!modal.open){game.elapsed+=Math.min(2,Math.floor((now-tick)/1000));updateTime();if(game.elapsed%10===0)save();}tick=now;},1000);
 setInterval(()=>{if(mode==='daily'&&isPlaying&&game&&!busy&&!document.hidden)updateTime();},100);
@@ -350,7 +354,7 @@ if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWor
 
 function chooseProfile(next){if(state.leaderboardProfile){next();return;}editProfile(next);}
 function editProfile(next=()=>showLeaderboard()){
-  dialog('<div class="modal-symbol">✦</div><h2>Your racing name.</h2><p>Your nickname and scores will be public. Your profile is saved on this device; clearing app data creates a new profile.</p><form id="profile-form"><label for="race-name">Nickname · 2–20 characters</label><input id="race-name" maxlength="20" minlength="2" required autocomplete="nickname"><p id="profile-error" role="alert"></p><button class="primary" id="profile-save">Save nickname</button></form>');
+  dialog('profile');
   $('race-name').value=state.leaderboardProfile?.name||'';
   $('profile-form').onsubmit=async event=>{
     event.preventDefault();$('profile-save').disabled=true;
@@ -360,7 +364,7 @@ function editProfile(next=()=>showLeaderboard()){
   };
 }
 async function showLeaderboard(day=dailyKey()){
-  dialog('<div class="modal-symbol">♕</div><h2>The daily leaderboard.</h2><label for="ranking-day">Puzzle date · UTC</label><input id="ranking-day" type="date"><p id="ranking-status" aria-live="polite">Loading times…</p><div id="ranking-entries"></div><button class="secondary" id="ranking-refresh">Refresh</button><button class="secondary" id="ranking-name">Set racing nickname</button>');
+  dialog('leaderboard');
   $('ranking-day').value=day;$('ranking-day').max=dailyKey();$('ranking-day').min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
   $('ranking-day').onchange=()=>showLeaderboard($('ranking-day').value);$('ranking-refresh').onclick=()=>showLeaderboard(day);$('ranking-name').textContent=state.leaderboardProfile?'Change nickname':'Set racing nickname';$('ranking-name').onclick=()=>editProfile(()=>showLeaderboard(day));
   const pending=state.dailyRun;

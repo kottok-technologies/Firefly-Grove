@@ -80,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        directory: ['.', 'aws-leaderboard', 'leaderboard-service']
+        directory: ['.', 'aws-leaderboard']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -109,7 +109,7 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
           format: table
-          skip-dirs: .git,node_modules,aws-leaderboard/node_modules,leaderboard-service/node_modules
+          skip-dirs: .git,node_modules,aws-leaderboard/node_modules
 
   lambda:
     name: Lambda build

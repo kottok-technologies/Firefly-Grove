@@ -1,6 +1,6 @@
 {
   "name": "firefly-grove",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "c8": "12.0.0",
     "eslint": "10.13.0",
     "globals": "17.13.0",
+    "jsdom": "29.1.1",
     "yaml": "2.9.1"
   },
   "engines": {
@@ -30,8 +31,10 @@
       "web/gestures.js",
       "aws-leaderboard/src/service.mjs",
       "aws-leaderboard/src/dynamo-store.mjs",
-      "leaderboard-service/lib/leaderboard.js",
-      "scripts/terraform-policy.mjs"
+      "scripts/terraform-policy.mjs",
+      "web/dialogs.js",
+      "web/generator-protocol.js",
+      "scripts/github-deploy-api.mjs"
     ],
     "reporter": [
       "text",

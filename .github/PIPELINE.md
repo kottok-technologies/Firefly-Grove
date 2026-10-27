@@ -4,9 +4,9 @@ Every push and pull request runs `.github/workflows/ci.yml` and `codeql.yml`. Bo
 
 | Check | What it verifies |
 | --- | --- |
-| Lint and repository checks | ESLint correctness rules for the game, AWS draft, scripts and tests; workflow YAML; immutable action pins; lockfile consistency; application version alignment; Gradle checksum; offline cache assets; shared puzzle sources |
+| Lint and repository checks | ESLint correctness rules for the game, AWS backend, scripts and tests; workflow YAML; immutable action pins; lockfile consistency; application version alignment; Gradle checksum; offline cache assets; shared puzzle sources |
 | Tests and coverage | Node tests plus actual DynamoDB transactions against an isolated local emulator, with no AWS account or credentials; HTML/LCOV/JSON coverage and JUnit reports |
-| Dependency audit | All three npm lockfiles, including development dependencies; high and critical findings fail the build |
+| Dependency audit | Both active npm lockfiles, including development dependencies; high and critical findings fail the build |
 | Secrets and infrastructure scan | Trivy scans the checked-out source for secrets and infrastructure misconfiguration; high and critical findings fail |
 | CodeQL | Extended security queries for JavaScript/TypeScript and Java; findings are uploaded to GitHub code scanning |
 | Review dependency changes | Pull requests fail when introducing high or critical dependency vulnerabilities |
@@ -20,7 +20,7 @@ Artifacts remain downloadable from Actions for 14 days. APKs are debug-signed fo
 
 ## Coverage
 
-Coverage fails below **95% lines/statements, 90% functions, or 85% branches**, aggregated across the puzzle engine, daily timing, drag logic, AWS API, DynamoDB store, original SQLite API and saved-plan integrity guards. Browser DOM wiring, the service worker, generated/copied files, legacy Sites scaffolding and native Android code are outside this JavaScript coverage scope. Android currently has no native unit-test sources; running its unit-test task does not imply native test coverage.
+Coverage fails below **95% lines/statements, 90% functions, or 85% branches**, aggregated across the puzzle engine, daily timing, drag logic, AWS API, DynamoDB store, dialog rendering, worker protocol and deployment API guards and saved-plan integrity guards. Browser DOM wiring, the service worker, generated/copied files,  and native Android code are outside this JavaScript coverage scope. Android also runs three JVM URL/CSP policy security tests; those tests are separate from the JavaScript coverage report.
 
 The local DynamoDB test refuses non-loopback endpoints and uses dummy credentials directly, so it cannot write to your AWS account. CI runs every integration test; local `npm test` skips that one test unless `DYNAMODB_ENDPOINT` is set. A coverage run without the local database is expected to fail the DynamoDB coverage threshold.
 
@@ -37,14 +37,14 @@ On PowerShell, set `$env:DYNAMODB_ENDPOINT='http://127.0.0.1:8000'` before runni
 
 ## Existing security debt
 
-The original, undeployed `leaderboard-service/` Sites prototype remains in source. At pipeline creation, its lockfile contains **15 high and 1 critical** dependency findings (plus lower-severity findings). The root tools and AWS dependency lockfiles have no reported vulnerabilities. The legacy audit is deliberately blocking: there is no ignore list, baseline waiver or `continue-on-error`. Updating/removing that prototype is a separate follow-up.
+The original Sites prototype, its lockfile and its unused toolchain have been removed. Both active npm dependency audits now report zero vulnerabilities; all remaining dependencies, including development tools, remain subject to the same blocking audit.
 
 The first infrastructure scan reported **AWS-0132 (high)** in the old CloudFormation artifact bucket. The CloudFormation templates and deployment script have now been removed. Terraform uses direct Lambda ZIP upload and a private, customer-KMS-encrypted state bucket. The replacement Terraform configuration has no high/critical findings in the local Trivy scan.
 
-The first CodeQL analysis also reports [a high-severity DOM/HTML alert](https://github.com/kottok-technologies/Firefly-Grove/security/code-scanning/1) at the shared dialog renderer in `web/app.js`, and [a medium-severity origin-check alert](https://github.com/kottok-technologies/Firefly-Grove/security/code-scanning/2) for the dedicated generator worker. These are findings to review, not confirmed exploitability assessments. They have not been dismissed or suppressed. CodeQL analysis completed successfully for both languages; review the Security tab separately from the analysis job status.
+The original DOM interpolation, missing worker-origin check, unused Java bridge and event-file HTTP-routing findings have code fixes and regression coverage. JavaScript remains necessary in the packaged Android game; its generic enablement warning is reviewed with strict origin/CSP restrictions rather than disabling game execution. See [the security review](../docs/SECURITY_REVIEW.md) for per-alert evidence and disposition.
 
 ## Deployment
 
 Quality CI never changes cloud resources. The separate **Terraform deployment** workflow is described in [infrastructure/README.md](../infrastructure/README.md). After operator-reviewed bootstrap, it uses separate OIDC plan/apply roles, creates a saved plan after successful CI, and requires explicit manual apply plus production-environment reviewers. It rejects stale/modified plans and open high/critical CodeQL alerts. It checks the deployed API and builds a connected debug APK; it does not publish to the Play Store. Missing bootstrap variables disable deployment. Bootstrap has been applied: state storage, encryption keys and OIDC roles are configured, repository variables are saved, and the production environment requires review on main. The production application has not been deployed.
 
-Dependabot opens weekly update PRs for Actions, npm packages and Gradle. Actions and the DynamoDB service image are pinned to immutable hashes; updates must pass these same checks.
+Dependabot opens weekly update PRs for Actions, npm packages, Gradle and Terraform. Actions and the DynamoDB service image are pinned to immutable hashes; updates must pass these same checks.

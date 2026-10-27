@@ -20,7 +20,7 @@ for(const file of await readdir(new URL('.github/workflows/',root))){
   }
 }
 const dependabot=parseDocument(await read('.github/dependabot.yml'));assert.equal(dependabot.errors.length,0);
-for(const directory of ['', 'aws-leaderboard/','leaderboard-service/']){
+for(const directory of ['', 'aws-leaderboard/']){
   const manifest=JSON.parse(await read(directory+'package.json')),lock=JSON.parse(await read(directory+'package-lock.json'));
   assert.equal(lock.lockfileVersion,3);assert.deepEqual(lock.packages[''].dependencies||{},manifest.dependencies||{});assert.deepEqual(lock.packages[''].devDependencies||{},manifest.devDependencies||{});
 }
