@@ -1,0 +1,1 @@
+{"name":"firefly-grove-aws-leaderboard","private":true,"type":"module","scripts":{"build":"node scripts/build.mjs"},"dependencies":{"@aws-sdk/client-dynamodb":"^3.0.0","@aws-sdk/lib-dynamodb":"^3.0.0"},"devDependencies":{"esbuild":"^0.25.0"}}

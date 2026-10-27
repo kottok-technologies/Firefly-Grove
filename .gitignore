@@ -1,0 +1,44 @@
+node_modules/
+android/.gradle/
+android/local.properties
+android/**/build/
+*.apk
+*.aab
+artifacts/
+aws-leaderboard/dist/
+
+# Local editor and agent state
+.idea/
+.vscode/
+.codex/
+.aws/
+Thumbs.db
+.DS_Store
+*.log
+
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+!.env.*.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials
+
+# Terraform working files and state (keep configuration and lock files)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+!*.example.tfvars.json
+crash.log
+crash.*.log
