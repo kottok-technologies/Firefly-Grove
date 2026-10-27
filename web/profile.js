@@ -2,8 +2,9 @@ const adjectives=['Amber','Breezy','Cozy','Dappled','Gentle','Golden','Happy','L
 const creatures=['Badger','Cricket','Fern','Finch','Firefly','Fox','Moth','Otter','Owl','Robin','Sprout','Wren'];
 
 export function createProfile(){
-  const entropy=crypto.getRandomValues(new Uint32Array(3));
-  return {localId:crypto.randomUUID(),name:adjectives[entropy[0]%adjectives.length]+creatures[entropy[1]%creatures.length]+String(entropy[2]%10000).padStart(4,'0')};
+  // Display names are cosmetic. Identity uses an independent cryptographic UUID.
+  const pick=items=>items[Math.floor(Math.random()*items.length)];
+  return {localId:crypto.randomUUID(),name:pick(adjectives)+pick(creatures)+String(Math.floor(Math.random()*10000)).padStart(4,'0')};
 }
 
 // One registration at a time, even when Settings and Race are opened together.
