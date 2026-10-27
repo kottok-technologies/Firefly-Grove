@@ -125,10 +125,21 @@ resource "aws_apigatewayv2_route" "api" {
   route_key = "ANY /api/v1/{proxy+}"
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
+data "aws_default_tags" "stage" {
+  provider = aws.stage
+}
 resource "aws_apigatewayv2_stage" "production" {
+  provider    = aws.stage
   api_id      = aws_apigatewayv2_api.leaderboard.id
   name        = "$default"
   auto_deploy = true
+  tags        = {}
+  lifecycle {
+    precondition {
+      condition     = length(data.aws_default_tags.stage.tags) == 0
+      error_message = "The stage provider must not request implicit tags or additional IAM permissions."
+    }
+  }
   default_route_settings {
     throttling_rate_limit    = var.request_rate
     throttling_burst_limit   = var.request_burst

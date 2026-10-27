@@ -49,6 +49,8 @@ The plan role can read production resource configuration and acquire/release the
 
 Apply is deliberately **manual** and deployment runs are serialized without cancellation. The native S3 lock is a second safeguard. Plan/apply use short-lived GitHub OIDC credentials with exact subject/audience conditions; no long-lived AWS credentials are stored in GitHub.
 
+The HTTP API retains project/environment tags. Its default stage uses a provider without inherited tags, because API Gateway requires an additional tagging permission for tagged stage creation. A plan-time precondition enforces that the stage requests no tags; the deployment role does not gain new tagging permissions.
+
 ## Local validation (no AWS resources)
 
 ```sh

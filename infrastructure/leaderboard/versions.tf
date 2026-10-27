@@ -20,3 +20,12 @@ provider "aws" {
     tags = { Project = "firefly-grove", Environment = "production", ManagedBy = "Terraform" }
   }
 }
+
+# API Gateway v2 checks a separate tagging permission when CreateStage has
+# tags. The stage does not need tags: its parent API carries project metadata.
+# This provider keeps the existing deployment role unchanged.
+provider "aws" {
+  alias               = "stage"
+  region              = var.aws_region
+  allowed_account_ids = [var.aws_account_id]
+}

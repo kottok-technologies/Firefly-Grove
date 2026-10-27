@@ -24,6 +24,10 @@ variables {
   runtime_boundary_arn = "arn:aws:iam::111111111111:policy/firefly-grove-production-runtime-boundary"
   service_kms_key_arn  = "arn:aws:kms:us-east-1:111111111111:key/11111111-1111-1111-1111-111111111111"
 }
+mock_provider "aws" {
+  alias           = "stage"
+  override_during = plan
+}
 run "production_security_defaults" {
   command = plan
   assert {
@@ -49,6 +53,10 @@ run "production_security_defaults" {
   assert {
     condition     = aws_cloudwatch_log_group.api.retention_in_days == 30 && aws_cloudwatch_log_group.api.kms_key_id == var.service_kms_key_arn
     error_message = "Use the fixed encryption key and bounded log retention."
+  }
+  assert {
+    condition     = length(aws_apigatewayv2_stage.production.tags) == 0 && length(data.aws_default_tags.stage.tags) == 0
+    error_message = "The stage must not require new tagging permissions; the parent API retains project tags."
   }
 }
 run "reject_unbounded_request_rate" {
