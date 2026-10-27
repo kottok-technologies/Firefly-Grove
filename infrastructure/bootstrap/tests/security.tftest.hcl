@@ -47,6 +47,12 @@ run "state_and_oidc_are_restricted" {
     condition     = aws_kms_key.service.enable_key_rotation && !strcontains(aws_iam_role_policy.github_apply.policy, "kms:CreateKey") && !strcontains(aws_iam_role_policy.github_apply.policy, "kms:PutKeyPolicy")
     error_message = "Only the operator bootstrap can create production keys or edit key policies."
   }
+  assert {
+    condition = anytrue([for statement in jsondecode(aws_iam_role_policy.github_apply.policy).Statement : try(statement.Sid == "ApiGatewayAccessLogDelivery", false) && try(
+      toset(statement.Action) == toset(["logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery", "logs:DeleteLogDelivery", "logs:ListLogDeliveries", "logs:DescribeResourcePolicies", "logs:PutResourcePolicy"]) && statement.Resource == "*" && statement.Condition.StringEquals["aws:RequestedRegion"] == "us-east-1", false
+    )])
+    error_message = "Access-log delivery needs only the documented CloudWatch delivery actions, restricted to us-east-1."
+  }
 }
 run "reuse_existing_github_provider" {
   command = plan

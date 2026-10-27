@@ -152,6 +152,15 @@ resource "aws_iam_role_policy" "github_apply" {
       # API Gateway generates API IDs: HTTP API operations must be region-wide.
       { Effect = "Allow", Action = ["apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"], Resource = ["arn:aws:apigateway:${local.region}::/apis", "arn:aws:apigateway:${local.region}::/apis/*", "arn:aws:apigateway:${local.region}::/tags/*"] },
       { Effect = "Allow", Action = ["logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy", "logs:AssociateKmsKey", "logs:DisassociateKmsKey", "logs:TagResource", "logs:UntagResource", "logs:TagLogGroup", "logs:UntagLogGroup"], Resource = [local.logs_arn, "${local.logs_arn}:*"] },
+      # API Gateway access-log delivery uses account-level CloudWatch APIs.
+      # AWS does not support log-group ARN scoping for these actions, so bound
+      # the explicit delivery/policy operations to the deployment region.
+      {
+        Sid       = "ApiGatewayAccessLogDelivery", Effect = "Allow"
+        Action    = ["logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery", "logs:DeleteLogDelivery", "logs:ListLogDeliveries", "logs:DescribeResourcePolicies", "logs:PutResourcePolicy"]
+        Resource  = "*"
+        Condition = { StringEquals = { "aws:RequestedRegion" = local.region } }
+      },
       { Effect = "Allow", Action = ["cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms", "cloudwatch:TagResource", "cloudwatch:UntagResource"], Resource = "arn:aws:cloudwatch:${local.region}:${local.account_id}:alarm:${local.name}-*" },
       { Effect = "Allow", Action = ["kms:CreateGrant", "kms:RevokeGrant"], Resource = aws_kms_key.service.arn, Condition = { Bool = { "kms:GrantIsForAWSResource" = "true" } } },
       { Effect = "Allow", Action = ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:ReEncryptFrom", "kms:ReEncryptTo"], Resource = aws_kms_key.service.arn, Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${local.region}.amazonaws.com" } } }

@@ -51,6 +51,8 @@ Apply is deliberately **manual** and deployment runs are serialized without canc
 
 The HTTP API retains project/environment tags. Its default stage uses a provider without inherited tags, because API Gateway requires an additional tagging permission for tagged stage creation. A plan-time precondition enforces that the stage requests no tags; the deployment role does not gain new tagging permissions.
 
+HTTP API access logging separately needs the CloudWatch Logs delivery control plane. The bootstrap policy explicitly lists `CreateLogDelivery`, `GetLogDelivery`, `UpdateLogDelivery`, `DeleteLogDelivery`, `ListLogDeliveries`, `DescribeResourcePolicies` and `PutResourcePolicy`, restricted by `aws:RequestedRegion` to `us-east-1`. AWS requires account-level (`Resource = "*"`) scope for these APIs, so they can manage log-delivery settings/resource policies across that region, not just this application's log group. No `logs:*`, log-event-reading permission, IAM administration or additional API tagging permission is granted. This operator-managed IAM expansion requires explicit approval and bootstrap apply; the application workflow cannot grant it to itself. See [AWS's required logging permissions](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging.html).
+
 ## Local validation (no AWS resources)
 
 ```sh
