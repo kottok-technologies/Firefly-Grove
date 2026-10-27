@@ -1,5 +1,7 @@
 # Firefly Grove
 
+AWS infrastructure and reviewed deployments are managed with [Terraform](infrastructure/README.md). Bootstrap and production applies are explicit; no infrastructure has been applied yet.
+
 [![CI](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/ci.yml/badge.svg)](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/codeql.yml/badge.svg)](https://github.com/kottok-technologies/Firefly-Grove/actions/workflows/codeql.yml)
 
@@ -83,4 +85,4 @@ The separate `leaderboard-service/` Site contains a Cloudflare Worker API, D1 mi
 
 The API starts and times ranked runs on the server, validates their puzzle finds, rejects failed/incomplete attempts and retired run IDs, limits requests, hashes player bearer tokens, and accepts idempotent finish retries. Network travel contributes to the official time. If a finish cannot reach the server, retrying later includes that delay; an accepted finish retried after a lost response retains its original time. This provides basic score integrity, not strong bot protection: the deterministic puzzle engine is distributed with the app. Guest profiles do not sync across devices or recover after app data is cleared.
 
-Publication status: source and local integration are ready, but production publication was blocked by automatic approval review of the required repository-credential transfer to the Sites workflow helper. The configured production URL is reserved; online play requires completing that publication and setting the Site audience to public. APK 1.4 includes leaderboard support and HTTPS Internet permission; offline play continues to work while the service is unpublished.
+Deployment status: Sites is the original undeployed prototype; AWS is the selected production backend. The previous CloudFormation drafts have been replaced by Terraform. The committed app has no production endpoint until a verified Terraform apply generates its configuration; the deployment workflow then produces a connected debug APK. Offline play works without a deployed service. See [infrastructure/README.md](infrastructure/README.md) for bootstrap, CI gates, review and apply steps.

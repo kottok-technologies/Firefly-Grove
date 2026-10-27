@@ -44,3 +44,7 @@ crash.log
 crash.*.log
 coverage/
 reports/
+**/backend.hcl
+infrastructure/**/plan.txt
+infrastructure/**/manifest.json
+infrastructure/**/build/

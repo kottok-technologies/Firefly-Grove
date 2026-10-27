@@ -5,7 +5,14 @@ const root=new URL('../',import.meta.url),read=path=>readFile(new URL(path,root)
 for(const file of await readdir(new URL('.github/workflows/',root))){
   if(!/\.ya?ml$/.test(file))continue;
   const doc=parseDocument(await read('.github/workflows/'+file));assert.equal(doc.errors.length,0,`${file}: invalid YAML`);
-  const workflow=doc.toJS();assert.ok(workflow.on.push!==undefined&&workflow.on.pull_request!==undefined,`${file}: push and pull_request triggers required`);
+  const workflow=doc.toJS();
+  if(file==='terraform-deploy.yml'){
+    assert.ok(workflow.on.workflow_run&&workflow.on.workflow_dispatch,`${file}: CI-completion and manual triggers required`);
+    assert.equal(workflow.jobs.apply.environment,'production');
+    assert.ok(workflow.jobs.apply.if.includes("github.event_name == 'workflow_dispatch'"),'Terraform apply must be manually requested');
+    assert.equal(workflow.concurrency['cancel-in-progress'],false,'Do not cancel active Terraform operations');
+  }else assert.ok(workflow.on.push!==undefined&&workflow.on.pull_request!==undefined,`${file}: push and pull_request triggers required`);
+  assert.equal(workflow.on.pull_request_target,undefined,`${file}: untrusted PR code must not run with deployment credentials`);
   assert.equal(workflow.permissions.contents,'read',`${file}: default contents permission must be read-only`);
   for(const [name,job] of Object.entries(workflow.jobs)){
     assert.ok(job['timeout-minutes']>0,`${file}/${name}: timeout required`);

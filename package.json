@@ -30,7 +30,8 @@
       "web/gestures.js",
       "aws-leaderboard/src/service.mjs",
       "aws-leaderboard/src/dynamo-store.mjs",
-      "leaderboard-service/lib/leaderboard.js"
+      "leaderboard-service/lib/leaderboard.js",
+      "scripts/terraform-policy.mjs"
     ],
     "reporter": [
       "text",
