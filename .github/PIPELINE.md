@@ -36,7 +36,11 @@ On PowerShell, set `$env:DYNAMODB_ENDPOINT='http://127.0.0.1:8000'` before runni
 
 ## Existing security debt
 
-The original, undeployed `leaderboard-service/` Sites prototype remains in source. At pipeline creation, its lockfile contains **15 high and 1 critical** dependency findings (plus lower-severity findings). The root tools and AWS dependency lockfiles have no reported vulnerabilities. The legacy audit is deliberately blocking: there is no ignore list, baseline waiver or `continue-on-error`. Updating/removing that prototype is a separate follow-up; replacing the AWS draft infrastructure with Terraform is also pending. Infrastructure scans may report additional draft CloudFormation configuration findings.
+The original, undeployed `leaderboard-service/` Sites prototype remains in source. At pipeline creation, its lockfile contains **15 high and 1 critical** dependency findings (plus lower-severity findings). The root tools and AWS dependency lockfiles have no reported vulnerabilities. The legacy audit is deliberately blocking: there is no ignore list, baseline waiver or `continue-on-error`. Updating/removing that prototype is a separate follow-up; replacing the AWS draft infrastructure with Terraform is also pending.
+
+The first infrastructure scan also reports **AWS-0132 (high)** in `aws-leaderboard/artifacts-template.json`: the artifact bucket uses encrypted SSE-S3 storage rather than a customer-managed KMS key. This is a stricter encryption-policy finding, not an unencrypted bucket or a public-access finding. It remains blocking and should be addressed in the planned Terraform design; CI does not rewrite or deploy the old CloudFormation draft.
+
+The first CodeQL analysis also reports [a high-severity DOM/HTML alert](https://github.com/kottok-technologies/Firefly-Grove/security/code-scanning/1) at the shared dialog renderer in `web/app.js`, and [a medium-severity origin-check alert](https://github.com/kottok-technologies/Firefly-Grove/security/code-scanning/2) for the dedicated generator worker. These are findings to review, not confirmed exploitability assessments. They have not been dismissed or suppressed. CodeQL analysis completed successfully for both languages; review the Security tab separately from the analysis job status.
 
 ## Deployment
 
