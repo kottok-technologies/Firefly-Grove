@@ -22,6 +22,7 @@ mock_provider "aws" {
 variables {
   aws_account_id       = "111111111111"
   runtime_boundary_arn = "arn:aws:iam::111111111111:policy/firefly-grove-production-runtime-boundary"
+  service_kms_key_arn  = "arn:aws:kms:us-east-1:111111111111:key/11111111-1111-1111-1111-111111111111"
 }
 run "production_security_defaults" {
   command = plan
@@ -46,8 +47,8 @@ run "production_security_defaults" {
     error_message = "Invocation permission must restrict the account and API route."
   }
   assert {
-    condition     = aws_kms_key.service.enable_key_rotation && aws_cloudwatch_log_group.api.retention_in_days == 30
-    error_message = "Enable key rotation and bounded log retention."
+    condition     = aws_cloudwatch_log_group.api.retention_in_days == 30 && aws_cloudwatch_log_group.api.kms_key_id == var.service_kms_key_arn
+    error_message = "Use the fixed encryption key and bounded log retention."
   }
 }
 run "reject_unbounded_request_rate" {

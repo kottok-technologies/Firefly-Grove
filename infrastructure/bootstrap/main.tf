@@ -17,10 +17,7 @@ locals {
     { Effect = "Allow", Action = ["apigateway:GET"], Resource = "arn:aws:apigateway:${local.region}::/apis/*" },
     { Effect = "Allow", Action = ["logs:DescribeLogGroups", "cloudwatch:DescribeAlarms", "cloudwatch:ListTagsForResource", "kms:ListAliases"], Resource = "*" },
     { Effect = "Allow", Action = ["logs:ListTagsForResource", "logs:ListTagsLogGroup"], Resource = local.logs_arn },
-    {
-      Effect    = "Allow", Action = ["kms:DescribeKey", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus", "kms:ListResourceTags"], Resource = "arn:aws:kms:${local.region}:${local.account_id}:key/*"
-      Condition = { StringEquals = { "aws:ResourceTag/Project" = "firefly-grove", "aws:ResourceTag/Environment" = "production" } }
-    }
+    { Effect = "Allow", Action = ["kms:DescribeKey"], Resource = aws_kms_key.service.arn }
   ]
   state_statements = [
     { Effect = "Allow", Action = "s3:ListBucket", Resource = aws_s3_bucket.state.arn, Condition = { StringLike = { "s3:prefix" = [local.state_key, "${local.state_key}.tflock", "env:/"] } } },
@@ -97,11 +94,8 @@ resource "aws_iam_policy" "runtime_boundary" {
       { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:BatchGetItem", "dynamodb:ConditionCheckItem"], Resource = local.table_arn },
       { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${local.logs_arn}:*" },
       {
-        Effect = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = "arn:aws:kms:${local.region}:${local.account_id}:key/*"
-        Condition = {
-          StringEquals               = { "kms:ViaService" = "dynamodb.${local.region}.amazonaws.com" }
-          "ForAnyValue:StringEquals" = { "kms:ResourceAliases" = "alias/${local.name}" }
-        }
+        Effect    = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.service.arn
+        Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${local.region}.amazonaws.com" } }
       },
       # X-Ray write APIs do not support resource-level permissions.
       { Effect = "Allow", Action = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"], Resource = "*" }
@@ -159,14 +153,30 @@ resource "aws_iam_role_policy" "github_apply" {
       { Effect = "Allow", Action = ["apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"], Resource = ["arn:aws:apigateway:${local.region}::/apis", "arn:aws:apigateway:${local.region}::/apis/*", "arn:aws:apigateway:${local.region}::/tags/*"] },
       { Effect = "Allow", Action = ["logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:PutRetentionPolicy", "logs:DeleteRetentionPolicy", "logs:AssociateKmsKey", "logs:DisassociateKmsKey", "logs:TagResource", "logs:UntagResource", "logs:TagLogGroup", "logs:UntagLogGroup"], Resource = [local.logs_arn, "${local.logs_arn}:*"] },
       { Effect = "Allow", Action = ["cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms", "cloudwatch:TagResource", "cloudwatch:UntagResource"], Resource = "arn:aws:cloudwatch:${local.region}:${local.account_id}:alarm:${local.name}-*" },
-      { Effect = "Allow", Action = "kms:CreateKey", Resource = "*", Condition = { StringEquals = { "aws:RequestTag/Project" = "firefly-grove", "aws:RequestTag/Environment" = "production" } } },
-      {
-        Effect    = "Allow", Action = ["kms:PutKeyPolicy", "kms:EnableKeyRotation", "kms:DisableKeyRotation", "kms:UpdateKeyDescription", "kms:TagResource", "kms:UntagResource", "kms:ScheduleKeyDeletion", "kms:CancelKeyDeletion", "kms:CreateAlias", "kms:UpdateAlias", "kms:DeleteAlias"]
-        Resource  = "arn:aws:kms:${local.region}:${local.account_id}:key/*"
-        Condition = { StringEquals = { "aws:ResourceTag/Project" = "firefly-grove", "aws:ResourceTag/Environment" = "production" } }
-      },
-      { Effect = "Allow", Action = ["kms:CreateGrant", "kms:RevokeGrant", "kms:ListGrants"], Resource = "arn:aws:kms:${local.region}:${local.account_id}:key/*", Condition = { Bool = { "kms:GrantIsForAWSResource" = "true" } } },
-      { Effect = "Allow", Action = ["kms:CreateAlias", "kms:UpdateAlias", "kms:DeleteAlias"], Resource = "arn:aws:kms:${local.region}:${local.account_id}:alias/${local.name}" }
+      { Effect = "Allow", Action = ["kms:CreateGrant", "kms:RevokeGrant"], Resource = aws_kms_key.service.arn, Condition = { Bool = { "kms:GrantIsForAWSResource" = "true" } } },
+      { Effect = "Allow", Action = ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:ReEncryptFrom", "kms:ReEncryptTo"], Resource = aws_kms_key.service.arn, Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${local.region}.amazonaws.com" } } }
     ])
   })
+}
+
+resource "aws_kms_key" "service" {
+  description             = "Firefly Grove production leaderboard data and logs"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Sid = "AccountAdministration", Effect = "Allow", Principal = { AWS = "arn:aws:iam::${local.account_id}:root" }, Action = "kms:*", Resource = "*" },
+      {
+        Sid       = "EncryptedCloudWatchLogs", Effect = "Allow", Principal = { Service = "logs.${local.region}.amazonaws.com" }
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"], Resource = "*"
+        Condition = { ArnLike = { "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${local.region}:${local.account_id}:log-group:/firefly-grove/production/*" } }
+      }
+    ]
+  })
+  lifecycle { prevent_destroy = true }
+}
+resource "aws_kms_alias" "service" {
+  name          = "alias/${local.name}"
+  target_key_id = aws_kms_key.service.key_id
 }

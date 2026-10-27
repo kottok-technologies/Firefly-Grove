@@ -26,8 +26,10 @@ env:
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
   TF_STATE_KMS_KEY_ARN: ${{ vars.TF_STATE_KMS_KEY_ARN }}
   TF_RUNTIME_BOUNDARY_ARN: ${{ vars.TF_RUNTIME_BOUNDARY_ARN }}
+  TF_SERVICE_KMS_KEY_ARN: ${{ vars.TF_SERVICE_KMS_KEY_ARN }}
   TF_VAR_aws_account_id: ${{ vars.AWS_ACCOUNT_ID }}
   TF_VAR_runtime_boundary_arn: ${{ vars.TF_RUNTIME_BOUNDARY_ARN }}
+  TF_VAR_service_kms_key_arn: ${{ vars.TF_SERVICE_KMS_KEY_ARN }}
 jobs:
   verify:
     name: Verify deployment request

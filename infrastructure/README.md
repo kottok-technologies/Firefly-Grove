@@ -2,14 +2,14 @@
 
 Two roots manage the production leaderboard in **us-east-1**:
 
-* `bootstrap/`: private versioned S3 state, a rotating customer-managed KMS key, GitHub OIDC trust, separate plan/apply IAM roles, and a permissions boundary for the Lambda runtime.
+* `bootstrap/`: private versioned S3 state, rotating customer-managed KMS keys for state and production, GitHub OIDC trust, separate plan/apply IAM roles, and a permissions boundary for the Lambda runtime.
 * `leaderboard/`: on-demand DynamoDB with PITR, customer-managed encryption and deletion protection; encrypted 30-day logs; a Node 24 ARM Lambda with published versions and a `live` alias; an HTTPS HTTP API with rate/burst limits; and CloudWatch error alarms.
 
 The small Lambda ZIP uploads directly through Terraform. The old CloudFormation templates and deployment script have been removed. Terraform-managed data and state keys have `prevent_destroy`; DynamoDB also has AWS deletion protection. Routine deploys cannot destroy those resources. GitHub has no destroy workflow.
 
 ## Current status
 
-Configuration, provider validation, mocked security tests and a local high/critical Trivy scan pass. A read-only bootstrap plan against the selected account proposes **13 additions, no changes and no deletions**, reusing that account's existing GitHub OIDC provider. **No Terraform apply has run.** Review `reports/bootstrap-plan.txt` locally; the binary plan is ignored at `infrastructure/bootstrap/bootstrap.tfplan`. Regenerate a plan whenever bootstrap configuration or account settings change.
+Configuration, provider validation, mocked security tests and a local high/critical Trivy scan pass. A read-only bootstrap plan against the selected account proposes **15 additions, no changes and no deletions**, reusing that account's existing GitHub OIDC provider. **No Terraform apply has run.** Review `reports/bootstrap-plan.txt` locally; the binary plan is ignored at `infrastructure/bootstrap/bootstrap.tfplan`. Regenerate a plan whenever bootstrap configuration or account settings change.
 
 Deployment is also gated on successful CI, successful CodeQL analysis, and no open high/critical CodeQL alerts. The existing Sites dependency audit and open high CodeQL finding must be resolved/reviewed before the application can deploy. Nothing bypasses those gates.
 
@@ -32,7 +32,7 @@ Use a real account ID in place of the placeholders. In a new account without Git
 
 Bootstrap intentionally starts with **local state** because its remote state bucket does not exist yet. Keep a secure backup of `infrastructure/bootstrap/terraform.tfstate` and its backup; never commit them. It manages IAM and the state-storage foundation and must remain operator-managed. Application state uses S3, KMS, versioning and native S3 `.tflock` locking; no deprecated DynamoDB lock table is required.
 
-The helper writes ignored `leaderboard/backend.hcl` and sets six non-secret repository variables from the applied outputs: `AWS_ACCOUNT_ID`, `TF_STATE_BUCKET`, `TF_STATE_KMS_KEY_ARN`, `TF_PLAN_ROLE_ARN`, `TF_APPLY_ROLE_ARN`, `TF_RUNTIME_BOUNDARY_ARN`. Without `--set-github-variables`, it prints those variables for manual configuration.
+The helper writes ignored `leaderboard/backend.hcl` and sets seven non-secret repository variables from the applied outputs: `AWS_ACCOUNT_ID`, `TF_STATE_BUCKET`, `TF_STATE_KMS_KEY_ARN`, `TF_PLAN_ROLE_ARN`, `TF_APPLY_ROLE_ARN`, `TF_RUNTIME_BOUNDARY_ARN`, `TF_SERVICE_KMS_KEY_ARN`. Without `--set-github-variables`, it prints those variables for manual configuration.
 
 In GitHub repository **Settings → Environments**, create `production`, configure **required reviewers**, and restrict deployments to `main`. Until that protection exists, the apply-request preflight refuses deployment. This task does not silently create a GitHub environment without approval rules. Restrict who can change Actions workflows and protect `main` with the CI checks documented in `.github/PIPELINE.md`.
 
@@ -45,7 +45,7 @@ In GitHub repository **Settings → Environments**, create `production`, configu
 5. Before AWS credentials are requested, the job verifies the workflow/run/repository, manifest, package checksums, account/backend configuration, current `main` commit, age and CI/security status. It applies the **same saved binary plan**; it never replans inside the apply job. An intervening commit or stale state requires a new reviewed plan.
 6. Health and database checks generate `deployed-leaderboard-config`. The workflow then builds `firefly-grove-connected-apk` with that endpoint. Both are Actions artifacts; no source-branch write or Play Store release occurs.
 
-The plan role can read production resource configuration and acquire/release the exact state lock; it cannot mutate application resources or write application state. The apply role can write the exact application state and manage project-scoped services. HTTP API IDs are AWS-generated, so API Gateway management is region-wide for HTTP APIs in `us-east-1`; several AWS list/describe APIs and X-Ray ingestion require wildcard resource scope. The Lambda role has a fixed permissions boundary so editable inline runtime policies cannot expand it to account administration. Review these policies before bootstrap.
+The plan role can read production resource configuration and acquire/release the exact state lock; it cannot mutate application resources or write application state. The apply role can write the exact application state and manage project-scoped services; it cannot create KMS keys or change key policies. Production encryption keys remain operator-managed in bootstrap. HTTP API IDs are AWS-generated, so API Gateway management is region-wide for HTTP APIs in `us-east-1`; several AWS list/describe APIs and X-Ray ingestion require wildcard resource scope. The Lambda role has a fixed permissions boundary so editable inline runtime policies cannot expand it to account administration. Review these policies before bootstrap.
 
 Apply is deliberately **manual** and deployment runs are serialized without cancellation. The native S3 lock is a second safeguard. Plan/apply use short-lived GitHub OIDC credentials with exact subject/audience conditions; no long-lived AWS credentials are stored in GitHub.
 
@@ -65,11 +65,11 @@ terraform -chdir=infrastructure/leaderboard test
 
 Mocked tests use no AWS credentials and create no cloud resources. Provider selections and Windows/Linux checksums are committed. When switching an initialized directory from mock checks to real state, use `terraform init -reconfigure -backend-config=backend.hcl` in the leaderboard directory.
 
-For operator-led application plans, build the bundle, set `TF_VAR_aws_account_id` and `TF_VAR_runtime_boundary_arn`, and initialize with the generated backend configuration. The same account allowlist and data protections apply.
+For operator-led application plans, build the bundle, set `TF_VAR_aws_account_id`, `TF_VAR_runtime_boundary_arn` and `TF_VAR_service_kms_key_arn`, and initialize with the generated backend configuration. The same account allowlist and data protections apply.
 
 ## Operations and cost
 
-There is no always-on server or NAT gateway. AWS charges for API/Lambda/DynamoDB usage, backups, logs, detailed metrics and alarms, and the two customer-managed KMS keys. These are not a zero-cost or hard-budget-capped deployment. API throttles limit requests but are not a billing cap. Error alarms are visible in CloudWatch; notification destinations and AWS Budgets should be configured separately before broad release.
+There is no always-on server or NAT gateway. AWS charges for API/Lambda/DynamoDB usage, backups, logs, detailed metrics and alarms, and the two bootstrap-managed customer-managed KMS keys. These are not a zero-cost or hard-budget-capped deployment. API throttles limit requests but are not a billing cap. Error alarms are visible in CloudWatch; notification destinations and AWS Budgets should be configured separately before broad release.
 
 Each deploy publishes a Lambda version and moves `live` to it. For rollback, revert the source change and create a new reviewed Terraform plan; do not edit the alias out-of-band and leave state drift. Data/schema migrations require their own compatibility/backup review. Bootstrap state, application state and player data are separate; rolling back Lambda code does not roll back player data.
 

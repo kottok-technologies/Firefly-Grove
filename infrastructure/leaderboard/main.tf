@@ -11,28 +11,6 @@ data "archive_file" "lambda" {
   output_path = "${path.module}/build/lambda.zip"
 }
 
-resource "aws_kms_key" "service" {
-  description             = "Firefly Grove production leaderboard data and logs"
-  enable_key_rotation     = true
-  deletion_window_in_days = 30
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      { Sid = "AccountAdministration", Effect = "Allow", Principal = { AWS = "arn:aws:iam::${local.account_id}:root" }, Action = "kms:*", Resource = "*" },
-      {
-        Sid       = "EncryptedCloudWatchLogs", Effect = "Allow", Principal = { Service = "logs.${local.region}.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"], Resource = "*"
-        Condition = { ArnLike = { "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${local.region}:${local.account_id}:log-group:/firefly-grove/production/*" } }
-      }
-    ]
-  })
-  lifecycle { prevent_destroy = true }
-}
-resource "aws_kms_alias" "service" {
-  name          = "alias/${local.name}"
-  target_key_id = aws_kms_key.service.key_id
-}
-
 resource "aws_dynamodb_table" "scores" {
   name                        = "${local.name}-scores"
   billing_mode                = "PAY_PER_REQUEST"
@@ -54,7 +32,7 @@ resource "aws_dynamodb_table" "scores" {
   point_in_time_recovery { enabled = true }
   server_side_encryption {
     enabled     = true
-    kms_key_arn = aws_kms_key.service.arn
+    kms_key_arn = var.service_kms_key_arn
   }
   lifecycle { prevent_destroy = true }
 }
@@ -62,12 +40,12 @@ resource "aws_dynamodb_table" "scores" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/firefly-grove/production/lambda"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.service.arn
+  kms_key_id        = var.service_kms_key_arn
 }
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/firefly-grove/production/api"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.service.arn
+  kms_key_id        = var.service_kms_key_arn
 }
 
 resource "aws_iam_role" "runtime" {
@@ -90,7 +68,7 @@ resource "aws_iam_role_policy" "runtime" {
       },
       { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.lambda.arn}:*" },
       {
-        Effect    = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.service.arn
+        Effect    = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = var.service_kms_key_arn
         Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${local.region}.amazonaws.com" } }
       },
       # X-Ray ingestion does not support resource-level IAM restrictions.

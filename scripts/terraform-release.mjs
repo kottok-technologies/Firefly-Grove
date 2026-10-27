@@ -9,7 +9,7 @@ const headers={Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/
 async function api(path){const response=await fetch('https://api.github.com/repos/'+repository+'/'+path,{headers});if(!response.ok)throw Error(`GitHub verification failed (${response.status}): ${path}`);return response.json();}
 async function output(values){for(const [key,value]of Object.entries(values)){if(/[\r\n]/.test(String(value)))throw Error('Invalid multiline output');await appendFile(process.env.GITHUB_OUTPUT,`${key}=${value}\n`);}}
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
-const config=()=>Object.fromEntries(['AWS_ACCOUNT_ID','TF_STATE_BUCKET','TF_STATE_KMS_KEY_ARN','TF_RUNTIME_BOUNDARY_ARN'].map(key=>{if(!process.env[key])throw Error('Missing repository variable '+key);return [key,process.env[key]];}));
+const config=()=>Object.fromEntries(['AWS_ACCOUNT_ID','TF_STATE_BUCKET','TF_STATE_KMS_KEY_ARN','TF_RUNTIME_BOUNDARY_ARN','TF_SERVICE_KMS_KEY_ARN'].map(key=>{if(!process.env[key])throw Error('Missing repository variable '+key);return [key,process.env[key]];}));
 async function checks(sha){
   const response=await api(`actions/runs?head_sha=${sha}&event=push&per_page=100`);
   for(const path of ['.github/workflows/ci.yml','.github/workflows/codeql.yml']){

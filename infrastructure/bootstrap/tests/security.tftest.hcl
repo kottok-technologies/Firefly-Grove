@@ -43,6 +43,10 @@ run "state_and_oidc_are_restricted" {
     condition     = length(aws_iam_role_policy.github_apply.policy) <= 10240
     error_message = "AWS IAM inline role policy size limit exceeded."
   }
+  assert {
+    condition     = aws_kms_key.service.enable_key_rotation && !strcontains(aws_iam_role_policy.github_apply.policy, "kms:CreateKey") && !strcontains(aws_iam_role_policy.github_apply.policy, "kms:PutKeyPolicy")
+    error_message = "Only the operator bootstrap can create production keys or edit key policies."
+  }
 }
 run "reuse_existing_github_provider" {
   command = plan

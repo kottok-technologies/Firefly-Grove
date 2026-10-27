@@ -29,6 +29,14 @@ variable "request_rate" {
     error_message = "API request rate must be between 1 and 500 requests/second."
   }
 }
+variable "service_kms_key_arn" {
+  description = "Fixed production encryption key created by the operator bootstrap."
+  type        = string
+  validation {
+    condition     = can(regex("^arn:aws:kms:us-east-1:[0-9]{12}:key/[a-f0-9-]{36}$", var.service_kms_key_arn))
+    error_message = "Use the production KMS key ARN output from bootstrap."
+  }
+}
 variable "request_burst" {
   type    = number
   default = 100
