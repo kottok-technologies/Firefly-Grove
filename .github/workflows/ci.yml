@@ -80,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        directory: ['.', 'aws-leaderboard']
+        directory: [ '.', 'aws-leaderboard' ]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -127,7 +127,8 @@ jobs:
       - run: npm ci --prefix aws-leaderboard
       - run: npm run build --prefix aws-leaderboard
       - name: Verify copied puzzle sources are current
-        run: git diff --exit-code -- aws-leaderboard/src/engine.js aws-leaderboard/src/daily.js
+        run: git diff --exit-code -- aws-leaderboard/src/engine.js
+          aws-leaderboard/src/daily.js
       - name: Package Lambda artifact
         working-directory: aws-leaderboard/dist
         run: |
@@ -155,9 +156,11 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Install Android SDK 36
-        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"'
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36"
+          "build-tools;36.0.0"'
       - name: Compile APK and run Android lint
-        run: ./android/gradlew --no-daemon --console=plain -p android assembleDebug lintDebug testDebugUnitTest
+        run: ./android/gradlew --no-daemon --console=plain -p android assembleDebug
+          lintDebug testDebugUnitTest
       - name: Verify APK signature and checksum
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify android/app/build/outputs/apk/debug/app-debug.apk
@@ -219,7 +222,17 @@ jobs:
   gate:
     name: CI required checks
     if: always()
-    needs: [quality, tests, dependencies, source-security, lambda, android, terraform, dependency-review]
+    needs:
+      [
+        quality,
+        tests,
+        dependencies,
+        source-security,
+        lambda,
+        android,
+        terraform,
+        dependency-review
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -228,3 +241,13 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -e 'to_entries | all(.[]; .value.result == "success" or (.key == "dependency-review" and .value.result == "skipped"))'
+  release:
+    name: Signed Android artifacts
+    needs: gate
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/android-release.yml
+    secrets: inherit

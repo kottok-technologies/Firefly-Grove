@@ -1,4 +1,13 @@
 plugins { id 'com.android.application' }
+
+// Local credentials are ignored by Git. CI supplies the same key through secrets.
+def signingFile = rootProject.file('signing/release.properties')
+def signingProperties = new Properties()
+if (signingFile.exists()) signingFile.withInputStream { signingProperties.load(it) }
+def signingValue = { name -> System.getenv('ANDROID_' + name) ?: signingProperties.getProperty(name) }
+def releaseSigning = ['KEYSTORE_PATH', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD'].collectEntries { [(it): signingValue(it)] }
+def hasReleaseSigning = releaseSigning.values().every { it }
+
 android {
     namespace 'com.fireflygrove.game'
     compileSdk 36
@@ -6,11 +15,35 @@ android {
         applicationId 'com.fireflygrove.game'
         minSdk 26
         targetSdk 36
-        versionCode 6
-        versionName '1.4.1'
+        versionCode 7
+        versionName '1.4.2'
+    }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseSigning.KEYSTORE_PATH)
+                storePassword releaseSigning.STORE_PASSWORD
+                keyAlias releaseSigning.KEY_ALIAS
+                keyPassword releaseSigning.KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
     }
     sourceSets { main { assets.srcDirs = ['../../web'] } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+
+// A distributable must never silently fall back to an unsigned or debug-signed APK.
+tasks.configureEach { task ->
+    if (task.name == 'validateSigningRelease' || task.name == 'preReleaseBuild') {
+        task.doFirst {
+            if (!hasReleaseSigning) throw new GradleException('Release signing credentials are missing. See docs/ANDROID_SIGNING.md.')
+        }
+    }
 }
 dependencies {
     implementation 'androidx.webkit:webkit:1.12.1'

@@ -1,3 +1,4 @@
+import {profileManager} from './profile.js';
 import {renderDialog} from './dialogs.js';
 import {raceApi,LEADERBOARD_ORIGIN} from './leaderboard-client.js';
 import { createGame, applyMove, findHint, isTarget, levelConfig } from './engine.js';
@@ -17,7 +18,8 @@ state.puzzleKeys ||= [];
 state.dailyRecords ||= {};
 // Keep test-server identities separate from real online profiles.
 state.leaderboardProfiles ||= {};
-state.leaderboardProfile=state.leaderboardProfiles[LEADERBOARD_ORIGIN]||null;
+const profiles=profileManager({profiles:state.leaderboardProfiles,origin:LEADERBOARD_ORIGIN,api:raceApi,persist:()=>save()});
+state.leaderboardProfile=profiles.profile;
 const puzzleKey = puzzle => puzzle.size + ':' + puzzle.regions.map(r=>r.toString(36)).join('');
 let game=state.game, busy=false, tick=Date.now(), pendingTap=null, worker=null, isPlaying=false;
 let renderedGame=null, idleTimer=null;
@@ -127,7 +129,7 @@ $('daily-play').onclick=()=>{
   if(run?.dailyDay===day&&run.startedAt!==null&&!run.completed&&run.lives>0){enterDaily(day);return;}
   dialog('dailyIntro');
   $('daily-start').onclick=()=>{close();enterDaily(dailyKey(),true);};
-  const ranked=document.createElement('button');ranked.className='primary';ranked.textContent='Race online →';ranked.onclick=()=>chooseProfile(()=>{close();enterDaily(dailyKey(),true,true);});$('daily-start').before(ranked);$('daily-start').textContent='Practice offline';$('daily-start').className='secondary';
+  const ranked=document.createElement('button');ranked.className='primary';ranked.textContent='Race online →';ranked.onclick=async()=>{ranked.disabled=true;try{await profiles.ensureOnline();close();enterDaily(dailyKey(),true,true);}catch(error){dialog('raceStartError');$('race-error').textContent=error.message;$('race-home').onclick=showHome;}finally{ranked.disabled=false;}};$('daily-start').before(ranked);$('daily-start').textContent='Practice offline';$('daily-start').className='secondary';
 };
 $('daily-previous').onclick=()=>{if(state.dailyRun)enterDaily(state.dailyRun.dailyDay);};
 async function newDailyRun(day,ranked=!!game?.online){
@@ -337,12 +339,21 @@ function tool(kind){
 $('hint').onclick=()=>tool('hints');$('reveal').onclick=()=>tool('reveals');
 $('restart').onclick=()=>{if(!game||busy)return;dialog('restart',{details:mode==="daily"?"Restart the same daily puzzle with three lives and a fresh clock. Your personal best stays saved. The current clock keeps running until you restart.":"Restart this puzzle with three lives. Your used tools stay spent. Restarting is always free.",restart:mode==="daily"?"Restart daily":"Restart level"});$('confirm-restart').onclick=()=>{close();if(game.completed){newLevel();}else newLevel(true);};$('keep-playing').onclick=close;};
 $('help').onclick=()=>dialog('help');
-$('settings').onclick=()=>{
+function showSettings(){
   dialog('settings');
   $('auto-cross').checked=!!state.settings.autoCross;$('haptics').checked=!!state.settings.haptics;
   for(const [id,key]of[['auto-cross','autoCross'],['haptics','haptics']])$(id).onchange=e=>{state.settings[key]=e.target.checked;save();render();};
+  $('race-name').value=state.leaderboardProfile.name;
+  $('player-id').textContent=state.leaderboardProfile.localId;
+  $('profile-form').onsubmit=async event=>{
+    event.preventDefault();const button=$('profile-save'),status=$('profile-error');button.disabled=true;
+    try{await profiles.rename($('race-name').value);if(status.isConnected){$('race-name').value=state.leaderboardProfile.name;status.textContent='Username saved.';}}
+    catch(error){if(status.isConnected)status.textContent=error.message;}
+    finally{button.disabled=false;}
+  };
   $('more-tools').onclick=()=>{dialog('moreTools');$('extra-hint').onclick=()=>offerReward('hints');$('extra-reveal').onclick=()=>offerReward('reveals');};
-};
+}
+$('settings').onclick=showSettings;
 setInterval(()=>{const now=Date.now();if(mode==='journey'&&isPlaying&&game&&!busy&&!game.completed&&game.lives>0&&!document.hidden&&!modal.open){game.elapsed+=Math.min(2,Math.floor((now-tick)/1000));updateTime();if(game.elapsed%10===0)save();}tick=now;},1000);
 setInterval(()=>{if(mode==='daily'&&isPlaying&&game&&!busy&&!document.hidden)updateTime();},100);
 setInterval(()=>{if(!isPlaying)renderHome();},30000);
@@ -352,21 +363,10 @@ if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWor
 
 
 
-function chooseProfile(next){if(state.leaderboardProfile){next();return;}editProfile(next);}
-function editProfile(next=()=>showLeaderboard()){
-  dialog('profile');
-  $('race-name').value=state.leaderboardProfile?.name||'';
-  $('profile-form').onsubmit=async event=>{
-    event.preventDefault();$('profile-save').disabled=true;
-    try{const previous=state.leaderboardProfile;const profile=await raceApi(previous?'profile':'players',{method:previous?'PUT':'POST',profile:previous,body:{name:$('race-name').value}});state.leaderboardProfile={...previous,...profile};state.leaderboardProfiles[LEADERBOARD_ORIGIN]=state.leaderboardProfile;save();next();}
-    catch(error){if($('profile-error'))$('profile-error').textContent=error.message;}
-    finally{if($('profile-save'))$('profile-save').disabled=false;}
-  };
-}
 async function showLeaderboard(day=dailyKey()){
   dialog('leaderboard');
   $('ranking-day').value=day;$('ranking-day').max=dailyKey();$('ranking-day').min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
-  $('ranking-day').onchange=()=>showLeaderboard($('ranking-day').value);$('ranking-refresh').onclick=()=>showLeaderboard(day);$('ranking-name').textContent=state.leaderboardProfile?'Change nickname':'Set racing nickname';$('ranking-name').onclick=()=>editProfile(()=>showLeaderboard(day));
+  $('ranking-day').onchange=()=>showLeaderboard($('ranking-day').value);$('ranking-refresh').onclick=()=>showLeaderboard(day);
   const pending=state.dailyRun;
   if(pending?.completed&&pending.online&&!pending.online.result){const retry=document.createElement('button');retry.className='secondary';retry.textContent='Upload finished race';retry.onclick=async()=>{await submitRace(pending);showLeaderboard(day);};$('ranking-entries').before(retry);}
   const status=$('ranking-status'),list=$('ranking-entries');
@@ -388,3 +388,6 @@ async function submitRace(run){
   finally{submittingRaces.delete(run);delete run.online.sending;try{localStorage.setItem(STORAGE,JSON.stringify(state));}catch{}updateRaceStatus(run);}
 }
 const rankingButton=document.createElement('button');rankingButton.id='leaderboard';rankingButton.className='secondary leaderboard-button';rankingButton.textContent='Daily leaderboard ♕';rankingButton.onclick=()=>showLeaderboard();$('daily-best').before(rankingButton);
+
+if(LEADERBOARD_ORIGIN)profiles.ensureOnline().catch(()=>{});
+window.addEventListener('online',()=>{if(LEADERBOARD_ORIGIN)profiles.ensureOnline().catch(()=>{});});

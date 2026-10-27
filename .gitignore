@@ -29,6 +29,7 @@ Thumbs.db
 *.pfx
 *.jks
 *.keystore
+android/signing/
 credentials
 
 # Terraform working files and state (keep configuration and lock files)

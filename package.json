@@ -1,6 +1,6 @@
 {
   "name": "firefly-grove",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -34,7 +34,8 @@
       "scripts/terraform-policy.mjs",
       "web/dialogs.js",
       "web/generator-protocol.js",
-      "scripts/github-deploy-api.mjs"
+      "scripts/github-deploy-api.mjs",
+      "web/profile.js"
     ],
     "reporter": [
       "text",
