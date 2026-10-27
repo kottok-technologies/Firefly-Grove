@@ -8,6 +8,7 @@ import {dailyKey,createDailyGame,beginDailyRun,dailyElapsed,freezeDailyRun,recor
 const $ = id => document.getElementById(id);
 const STORAGE = 'firefly-grove-v1';
 const DOUBLE_TAP_MS = 600;
+const CARE_PACKAGE_LEVELS = 10;
 const palette = ['#d9e5ba','#e6c2a9','#c6dcd6','#e7d9a4','#cfc9e2','#b8d4ac','#e4c7ce','#bfcde0','#e3c49a','#c1dfc2','#d7d3ac','#c9bee0','#dbbcae','#b8d9dd'];
 const fly = '<span class="firefly-arrival"><svg class="firefly-sprite" viewBox="0 0 48 48" aria-hidden="true"><g class="firefly-wings"><path d="M22 24C4 28 6 7 16 13c5 3 7 8 8 13C25 8 41 8 38 20c-2 8-9 8-14 6" fill="#faf9dc" stroke="#567344" stroke-width="1.5"/></g><ellipse cx="24" cy="31" rx="7" ry="10" fill="#38593c"/><ellipse class="firefly-light" cx="24" cy="35" rx="5" ry="5" fill="#e7d985"/><circle cx="24" cy="22" r="5" fill="#38593c"/><path d="m22 19-4-5m8 5 4-5" stroke="#38593c" stroke-width="1.5" stroke-linecap="round"/></svg></span>';
 const cross = '<svg class="cross-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round"><g stroke="#fffdec" stroke-width="6"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g><g stroke="#234536" stroke-width="3.5"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g></svg>';
@@ -92,8 +93,8 @@ function renderHome(){
   $('play-meta').textContent=`${config.size} × ${config.size} · ${config.givens===2?'Two starter fireflies':config.givens===1?'One starter firefly':config.label}`;
   $('hearts-home-status').textContent=hearts.pending().length?`${hearts.pending().length} completed ${hearts.pending().length===1?'level':'levels'} awaiting upload today`:'Earn 1–3 hearts for each journey level you finish.';
   $('home-hints').textContent=state.hints;$('home-reveals').textContent=state.reveals;
-  $('progress').style.width=`${state.completed%5/5*100}%`;
-  $('milestone-text').textContent=`${5-state.completed%5} more ${5-state.completed%5===1?'level':'levels'} to your next care package.`;
+  $('progress').style.width=`${state.completed%CARE_PACKAGE_LEVELS/CARE_PACKAGE_LEVELS*100}%`;
+  $('milestone-text').textContent=`${CARE_PACKAGE_LEVELS-state.completed%CARE_PACKAGE_LEVELS} more ${CARE_PACKAGE_LEVELS-state.completed%CARE_PACKAGE_LEVELS===1?'level':'levels'} to your next care package.`;
   const day=dailyKey(),record=state.dailyRecords[day],run=state.dailyRun?.dailyDay===day?state.dailyRun:null;
   $('daily-date').textContent=new Date(day+'T00:00:00Z').toLocaleDateString(undefined,{month:'short',day:'numeric',timeZone:'UTC'});
   $('daily-best').textContent=record?`Personal best ${formatSpeed(record.bestMs)} · ${record.finishes} ${record.finishes===1?'finish':'finishes'}`:'Set your first time today';
@@ -161,7 +162,7 @@ $('message-details').onclick=()=>{
   dialog('hintDetails');
   $('full-explanation').textContent=lastMessage.text;
 };
-$('care-package').onclick=()=>dialog('carePackage',{progress:`You have completed ${state.completed} levels. ${5-state.completed%5} more to your next package.`});
+$('care-package').onclick=()=>dialog('carePackage',{progress:`You have completed ${state.completed} levels. ${CARE_PACKAGE_LEVELS-state.completed%CARE_PACKAGE_LEVELS} more to your next package.`});
 new ResizeObserver(([entry])=>{
   const side=Math.floor(Math.min(entry.contentRect.width,entry.contentRect.height));
   $('board-wrap').style.width=`${Math.max(0,side)}px`;
@@ -305,7 +306,7 @@ function win(){
   game.heartCompletion=hearts.queue(game);
   hearts.flush().then(()=>updateJourneyHeartStatus(completedGame));
   state.completed++;state.level++;let reward=false;
-  if(state.completed%5===0){state.hints+=2;state.reveals++;reward=true;}
+  if(state.completed%CARE_PACKAGE_LEVELS===0){state.hints+=2;state.reveals++;reward=true;}
   save();render();
   // Let the last firefly finish arriving before covering the board.
   setTimeout(()=>{
@@ -339,7 +340,7 @@ function showLoss(){
 }
 function offerReward(kind){
   const native=location.origin==='https://appassets.androidplatform.net';
-  dialog('reward',{symbol:kind==="life"?"♡":"✧",details:`${kind==="life"?"Restore one life":kind==="hints"?"Add one hint":"Add one firefly reveal"} with an optional reward video. You can always keep playing and earn tools every five completed levels.`,note:native?"Reward videos are unavailable until an ad provider is configured for this Android build.":"Browser preview: this is a simulated reward. No real advertisement will play.",back:game?.lives===0?"Back to restart":"Back to the grove"});
+  dialog('reward',{symbol:kind==="life"?"♡":"✧",details:`${kind==="life"?"Restore one life":kind==="hints"?"Add one hint":"Add one firefly reveal"} with an optional reward video. You can always keep playing and earn tools every ten completed levels.`,note:native?"Reward videos are unavailable until an ad provider is configured for this Android build.":"Browser preview: this is a simulated reward. No real advertisement will play.",back:game?.lives===0?"Back to restart":"Back to the grove"});
   $('preview-reward').hidden=native;
   if(!native)$('preview-reward').onclick=()=>{if(kind==='life'){game.heartFinds.push(-1);game.lives=1;}else state[kind]++;save();render();close();message(kind==='life'?'One life restored. Take your time.':'Your preview reward is ready. Select the tool to use it.');};
   $('reward-back').onclick=()=>{if(isPlaying&&game?.lives===0)showLoss();else close();};
