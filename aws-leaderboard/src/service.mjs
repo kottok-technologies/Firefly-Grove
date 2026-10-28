@@ -28,7 +28,7 @@ export function createHandler(store,{now=()=>Date.now()}={}){
       const method=event.requestContext?.http?.method||event.httpMethod,path=(event.rawPath||event.path||'').replace(/\/$/,'');
       if(method==='OPTIONS')return {statusCode:204,headers,body:''};
       const time=now(),today=dailyKey(new Date(time));
-      if(path==='/api/v1/health'&&method==='GET')return respond({ok:true,version:'speed-v1',day:today,provider:'aws',journeyHearts:'journey-v1'});
+      if(path==='/api/v1/health'&&method==='GET')return respond({ok:true,version:'speed-v1',day:today,provider:'aws',journeyHearts:'journey-v2'});
       const body=()=>{
         const contentType=event.headers?.['content-type']||event.headers?.['Content-Type']||'';
         if(!contentType.startsWith('application/json'))throw new ApiError(415,'Send JSON data.');

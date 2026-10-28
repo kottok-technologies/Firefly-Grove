@@ -39,12 +39,12 @@ export function levelConfig(level) {
   const size=level<=3?4:level<=6?5:level<=9?6:level<=12?7:Math.min(10,8+Math.floor((level-13)/10));
   return { size, givens: level <= 3 ? 2 : level <= 6 ? 1 : 0, label: level <= 6 ? 'Training' : ['Gentle', 'Thoughtful', 'Challenging'][(level - 7) % 3] };
 }
-export function generatePuzzle(n, seed, difficulty = 0) {
+export function generateClassicPuzzle(n, seed, difficulty = 0, requestedSingletons) {
   if(!Number.isInteger(n)||n<4||n>10)throw new RangeError('Puzzle size must be between 4 and 10.');
   const rng = random(seed);
   // Choose the count once, before retries, so easier-to-generate layouts do not
   // bias the output toward extra singletons. Expected count: 1.17.
-  const roll = rng(), singletonCount = roll < .85 ? 1 : roll < .98 ? 2 : 3;
+  const roll = rng(), singletonCount = requestedSingletons ?? (roll < .85 ? 1 : roll < .98 ? 2 : 3);
   const maxRegionSize = Math.ceil(n * n / (n - singletonCount) * 1.8);
   for (;;) {
     let columns;
@@ -103,12 +103,95 @@ export function generatePuzzle(n, seed, difficulty = 0) {
     if(!check.exhausted&&check.solutions.length===1)return {size:n,regions,solution:columns,seed,effort:check.nodes,difficulty};
   }
 }
-export function createGame(level, seed) {
-  const config = levelConfig(level), puzzle = generatePuzzle(config.size, seed, (level - 7) % 3);
+// Measure the actual solving path, rather than using search effort as a proxy.
+// A basic placement is the last candidate in any row, column, or color after
+// applying confirmed fireflies. Only explained deductions can break a stall.
+export function gradePuzzle(puzzle) {
+  const n=puzzle.size, marks=Array(n*n).fill(0), game={...puzzle,marks};
+  const row=i=>Math.floor(i/n), column=i=>i%n, color=i=>puzzle.regions[i];
+  let basicPlacements=0, advancedSteps=0, openingChain=null, chain=0, longestChain=0;
+  const stages=new Set(), techniques={};
+  for(let step=0;step<n*n*2;step++){
+    const found=marks.flatMap((mark,i)=>mark===2?[i]:[]);
+    longestChain=Math.max(longestChain,chain);
+    if(found.length===n)return {solved:true,basicPlacements,advancedSteps,reasoningStages:stages.size,openingChain:openingChain??basicPlacements,longestChain,techniques};
+    for(let i=0;i<marks.length;i++)if(!marks[i]&&found.some(t=>row(t)===row(i)||column(t)===column(i)||color(t)===color(i)||(Math.abs(row(t)-row(i))<=1&&Math.abs(column(t)-column(i))<=1)))marks[i]=1;
+    const available=marks.flatMap((mark,i)=>mark===0?[i]:[]);
+    let forced=null;
+    for(const groupOf of [color,row,column]){
+      for(let group=0;group<n;group++){
+        if(found.some(i=>groupOf(i)===group))continue;
+        const cells=available.filter(i=>groupOf(i)===group);
+        if(!cells.length)return {solved:false};
+        if(cells.length===1){forced=cells[0];break;}
+      }
+      if(forced!==null)break;
+    }
+    if(forced!==null){marks[forced]=2;basicPlacements++;chain++;continue;}
+    openingChain??=basicPlacements;chain=0;
+    const hint=findHint(game);if(!hint)return {solved:false};
+    stages.add(found.length);advancedSteps++;techniques[hint.kind]=(techniques[hint.kind]||0)+1;
+    for(const i of hint.cells)marks[i]=hint.target?2:1;
+  }
+  return {solved:false};
+}
+export function difficultyRequirements(n,difficulty,singletons=1) {
+  const tier=Math.max(0,Math.min(2,difficulty));
+  return {advancedSteps:Math.min(tier+1,n-singletons-1),reasoningStages:n-singletons>=5&&(n>=8||tier===2)?2:1,
+    openingChain:Math.max(singletons,2),longestChain:Math.max(singletons,Math.ceil(n*(tier===2?.5:.65)))};
+}
+function matchesDifficulty(grade,requirements) {
+  return grade.solved&&grade.advancedSteps>=requirements.advancedSteps&&grade.reasoningStages>=requirements.reasoningStages&&grade.openingChain<=requirements.openingChain&&grade.longestChain<=requirements.longestChain;
+}
+function staysConnected(regions,n,removed) {
+  const color=regions[removed],cells=regions.flatMap((r,i)=>r===color&&i!==removed?[i]:[]);
+  const seen=new Set([cells[0]]),stack=[cells[0]];
+  while(stack.length)for(const cell of neighbors(stack.pop(),n))if(cell!==removed&&regions[cell]===color&&!seen.has(cell)){seen.add(cell);stack.push(cell);}
+  return seen.size===cells.length;
+}
+export function generatePuzzle(n,seed,difficulty=0) {
+  if(n<6)return generateClassicPuzzle(n,seed,difficulty);
+  if(!Number.isInteger(n)||n>10)throw new RangeError('Puzzle size must be between 4 and 10.');
+  const rng=random(seed^0x7f4a7c15),roll=random(seed)();
+  const singletonCount=roll<.85?1:roll<.98?2:3,requirements=difficultyRequirements(n,difficulty,singletonCount);
+  const cap=Math.ceil(n*n/(n-singletonCount)*1.8);
+  // Alter connected region boundaries without moving targets or adding extra
+  // singletons. Reject each edit that introduces a second solution, and accept
+  // a board only after the logical grader proves it breaks the singles chain.
+  for(let restart=0;restart<40;restart++){
+    const puzzle=generateClassicPuzzle(n,(seed+Math.imul(restart,7919))>>>0,difficulty,singletonCount);
+    const targets=new Set(puzzle.solution.map((c,r)=>r*n+c)),sizes=Array(n).fill(0);
+    puzzle.regions.forEach(color=>sizes[color]++);
+    let accepted=0;
+    for(let attempt=0;attempt<250;attempt++){
+      const options=[];
+      for(let cell=0;cell<n*n;cell++)if(!targets.has(cell)&&sizes[puzzle.regions[cell]]>2){
+        for(const color of new Set(neighbors(cell,n).map(i=>puzzle.regions[i]))){
+          if(color!==puzzle.regions[cell]&&sizes[color]>1&&sizes[color]<cap)options.push([cell,color]);
+        }
+      }
+      if(!options.length)break;
+      const [cell,color]=options[Math.floor(rng()*options.length)],previous=puzzle.regions[cell];
+      if(!staysConnected(puzzle.regions,n,cell))continue;
+      puzzle.regions[cell]=color;
+      const check=solve(puzzle.regions,n,{budget:20000});
+      if(check.exhausted||check.solutions.length!==1){puzzle.regions[cell]=previous;continue;}
+      sizes[previous]--;sizes[color]++;accepted++;
+      if(accepted%4)continue;
+      const grade=gradePuzzle(puzzle);
+      if(matchesDifficulty(grade,requirements))return {...puzzle,seed,effort:check.nodes,grade};
+    }
+  }
+  // Do not silently hand the player another trivial puzzle on a hard seed.
+  throw new Error('Unable to generate a puzzle at the required difficulty.');
+}
+export function createGame(level, seed, generation = level<=6?'journey-v1':'journey-v2') {
+  const config = levelConfig(level), difficulty = (level - 7) % 3;
+  const puzzle = generation==='journey-v1'?generateClassicPuzzle(config.size,seed,difficulty):generatePuzzle(config.size,seed,difficulty);
   const marks = Array(config.size ** 2).fill(0), rng = random(seed ^ 0xabc123);
   const givenRows = shuffle(Array.from({ length: config.size }, (_, i) => i), rng).slice(0, config.givens);
   const givens = givenRows.map(r => r * config.size + puzzle.solution[r]); givens.forEach(i => marks[i] = 2);
-  return { ...puzzle, level, marks, givens, lives: 3, mistakes: 0, elapsed: 0, completed: false };
+  return { ...puzzle, generation, level, marks, givens, lives: 3, mistakes: 0, elapsed: 0, completed: false };
 }
 export const isTarget = (game, i) => game.solution[Math.floor(i / game.size)] === i % game.size;
 export function applyMove(game, i, target) {

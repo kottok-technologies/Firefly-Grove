@@ -75,7 +75,7 @@ test('AWS validation rejects illegal solutions and handles dates, CORS and failu
 const journey=(level=1,mistakes=0,seed=42)=>{
   const game=createGame(level,seed),wrong=game.marks.findIndex((_,i)=>!isTarget(game,i));
   const targets=game.marks.flatMap((mark,i)=>mark!==2&&isTarget(game,i)?[i]:[]);
-  return {version:'journey-v1',day,level,seed,finds:[...Array(mistakes).fill(wrong),...targets]};
+  return {version:game.generation,day,level,seed,finds:[...Array(mistakes).fill(wrong),...targets]};
 };
 test('journey completion derives hearts from replay, including reveals and valid revives',()=>{
   for(const level of [1,4,7,13,23,33])for(let mistakes=0;mistakes<3;mistakes++)assert.equal(validateJourneyCompletion(journey(level,mistakes)).hearts,3-mistakes);

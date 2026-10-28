@@ -21,7 +21,7 @@ export function heartsManager({state,origin,profile,ensureOnline,api,persist,now
   let uploading=null;
   function queue(game){
     if(!game.completed||game.lives<1||!Array.isArray(game.heartFinds)||game.level<=(ledger.lastLevel[owner]||0))return null;
-    const entry={owner,body:{version:'journey-v1',day:dailyKey(now()),level:game.level,seed:game.seed,finds:[...game.heartFinds]},hearts:game.lives,status:'pending'};
+    const entry={owner,body:{version:game.generation||'journey-v1',day:dailyKey(now()),level:game.level,seed:game.seed,finds:[...game.heartFinds]},hearts:game.lives,status:'pending'};
     ledger.lastLevel[owner]=game.level;ledger.pending.push(entry);persist();return entry;
   }
   function pending(){return ledger.pending.filter(entry=>entry.owner===owner);}
@@ -45,6 +45,12 @@ export function heartsManager({state,origin,profile,ensureOnline,api,persist,now
           delete entry.error;ledger.pending.splice(ledger.pending.indexOf(entry),1);persist();
         }catch(error){
           entry.error=error.message;
+          // Retain the replay during a staggered app/server rollout. An older
+          // server reports an unknown puzzle version as this specific 400.
+          if(entry.body.version==='journey-v2'&&error.status===400&&error.message==='Invalid journey puzzle.'){
+            entry.error='Heart rankings need the updated server. Your completion is saved for retry.';
+            persist();break;
+          }
           if([400,410].includes(error.status)){
             entry.status=error.status===410?'expired':'rejected';
             ledger.pending.splice(ledger.pending.indexOf(entry),1);persist();continue;

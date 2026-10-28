@@ -1,4 +1,4 @@
-import {generatePuzzle} from './engine.js';
+import {generateClassicPuzzle} from './engine.js';
 
 // UTC gives every player the same daily puzzle and an unambiguous reset time.
 export const dailyKey=(date=new Date())=>date.toISOString().slice(0,10);
@@ -9,7 +9,7 @@ export function dailySeed(day){
   return hash;
 }
 export function createDailyGame(day){
-  const puzzle=generatePuzzle(8,dailySeed(day),1);
+  const puzzle=generateClassicPuzzle(8,dailySeed(day),1);
   return {...puzzle,dailyDay:day,givens:[],marks:Array(64).fill(0),lives:3,mistakes:0,elapsed:0,elapsedMs:0,startedAt:null,completed:false};
 }
 export function beginDailyRun(game,now=Date.now()){
