@@ -7,6 +7,11 @@ if (signingFile.exists()) signingFile.withInputStream { signingProperties.load(i
 def signingValue = { name -> System.getenv('ANDROID_' + name) ?: signingProperties.getProperty(name) }
 def releaseSigning = ['KEYSTORE_PATH', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD'].collectEntries { [(it): signingValue(it)] }
 def hasReleaseSigning = releaseSigning.values().every { it }
+def playGamesProperties = new Properties()
+def playGamesFile = rootProject.file('play-games.properties')
+if (playGamesFile.exists()) playGamesFile.withInputStream { playGamesProperties.load(it) }
+def playGamesProjectId = project.findProperty('playGamesProjectId') ?: System.getenv('ANDROID_PLAY_GAMES_PROJECT_ID') ?: playGamesProperties.getProperty('projectId', '0')
+if (playGamesProjectId != '0' && !(playGamesProjectId ==~ /[1-9][0-9]{5,19}/)) throw new GradleException('Invalid Play Games Services project ID.')
 
 android {
     namespace 'com.fireflygrove.game'
@@ -15,8 +20,9 @@ android {
         applicationId 'com.fireflygrove.game'
         minSdk 26
         targetSdk 36
-        versionCode 20
-        versionName '1.8.0'
+        versionCode 21
+        versionName '1.9.0'
+        resValue 'string', 'game_services_project_id', playGamesProjectId
     }
     signingConfigs {
         release {
@@ -47,5 +53,6 @@ tasks.configureEach { task ->
 }
 dependencies {
     implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
     testImplementation 'junit:junit:4.13.2'
 }

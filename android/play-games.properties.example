@@ -1,0 +1,3 @@
+# Public numeric project ID from Play Console > Play Games Services > Configuration.
+# Copy to play-games.properties for a local configured build.
+projectId=0

@@ -30,6 +30,7 @@ import java.util.Map;
 public final class MainActivity extends Activity {
     private static final String APP_URL = "https://appassets.androidplatform.net/assets/index.html";
     private WebView web;
+    private PlayGamesCloud cloud;
     private OnBackInvokedCallback backCallback;
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -47,7 +48,7 @@ public final class MainActivity extends Activity {
         web.setBackgroundColor(0xfff7f8f2);
         // Required by the packaged game engine. Executable content is restricted
         // to APK assets by interception, CSP, and blocked external navigation.
-        // No Java object or native message bridge is exposed to page scripts.
+        // Cloud saves use a separate, main-frame and exact-origin message API.
         web.getSettings().setJavaScriptEnabled(true);
         web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setAllowFileAccess(false);
@@ -57,6 +58,7 @@ public final class MainActivity extends Activity {
         web.getSettings().setSupportMultipleWindows(false);
         web.getSettings().setGeolocationEnabled(false);
         web.getSettings().setMediaPlaybackRequiresUserGesture(true);
+        cloud = new PlayGamesCloud(this, web);
         web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) { return intercept(loader, request); }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return !isPackagedAsset(request.getUrl()); }
@@ -104,7 +106,8 @@ public final class MainActivity extends Activity {
             response.setResponseHeaders(headers);
             return response;
         }
-        // Only JSON API traffic may leave the shell. CSP independently prevents
+        // Only allowlisted JSON API traffic may leave the WebView. Play Games
+        // networking is handled separately by its native SDK. CSP prevents
         // loading remote executable content, frames, inline handlers, and eval.
         if (WebSecurityPolicy.isApiRequest(uri.toString(), request.isForMainFrame(), request.getMethod())) return null;
         return blocked();
@@ -115,8 +118,12 @@ public final class MainActivity extends Activity {
         return new WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden", headers,
             new ByteArrayInputStream("Blocked by the packaged app policy.".getBytes(StandardCharsets.UTF_8)));
     }
-    @Override protected void onPause() { web.evaluateJavascript("document.dispatchEvent(new Event('visibilitychange'))", null); web.onPause(); super.onPause(); }
-    @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); enterFullscreen(); }
+    @Override protected void onPause() { web.evaluateJavascript("document.dispatchEvent(new Event('firefly-pause'))", null); web.onPause(); super.onPause(); }
+    @Override protected void onResume() {
+        super.onResume();
+        if (web != null) { web.onResume(); web.evaluateJavascript("document.dispatchEvent(new Event('firefly-resume'))", null); }
+        enterFullscreen();
+    }
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) enterFullscreen();
@@ -146,6 +153,6 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (Build.VERSION.SDK_INT >= 33 && backCallback != null)
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
-        web.destroy(); super.onDestroy();
+        cloud.destroy(); web.destroy(); super.onDestroy();
     }
 }

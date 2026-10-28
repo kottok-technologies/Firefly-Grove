@@ -1,6 +1,6 @@
 {
   "name": "firefly-grove",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -39,7 +39,10 @@
       "web/hearts.js",
       "aws-leaderboard/src/journey.mjs",
       "web/hint-overlay.js",
-      "web/firefly-player.js"
+      "web/firefly-player.js",
+      "web/cloud.js",
+      "web/cloud-state.js",
+      "web/cloud-bridge.js"
     ],
     "reporter": [
       "text",

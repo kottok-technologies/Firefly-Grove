@@ -7,7 +7,7 @@ AWS infrastructure and reviewed deployments are managed with [Terraform](infrast
 
 Pushes and pull requests run lint, tests, enforced coverage, dependency/security scans, and Android/Lambda builds. See [.github/PIPELINE.md](.github/PIPELINE.md) for commands, coverage scope, artifacts, existing security findings and deployment boundaries.
 
-A calm, original firefly-themed region puzzle for Android, with a mobile-only browser preview. No forced advertising, accounts, analytics, or paid dependencies.
+A calm, original firefly-themed region puzzle for Android, with a mobile-only browser preview. Guest play, no forced advertising, and optional Google Play cloud saves.
 
 ## Play locally
 
@@ -83,7 +83,7 @@ The daily entry offers **Race online** and **Practice offline**. Each installati
 
 The AWS Lambda API lives in `aws-leaderboard/` and uses DynamoDB. The unused Sites/Cloudflare prototype and its dependency tree have been retired. Build the backend with `npm ci --prefix aws-leaderboard` and `npm run build --prefix aws-leaderboard`; API and transaction tests run against a local DynamoDB emulator without an AWS account. Production endpoint configuration is generated only after a verified Terraform deployment.
 
-The API starts and times ranked runs on the server, validates their puzzle finds, rejects failed/incomplete attempts and retired run IDs, limits requests, hashes player bearer tokens, and accepts idempotent finish retries. Network travel contributes to the official time. If a finish cannot reach the server, retrying later includes that delay; an accepted finish retried after a lost response retains its original time. This provides basic score integrity, not strong bot protection: the deterministic puzzle engine is distributed with the app. Guest profiles do not sync across devices or recover after app data is cleared.
+The API starts and times ranked runs on the server, validates their puzzle finds, rejects failed/incomplete attempts and retired run IDs, limits requests, hashes player bearer tokens, and accepts idempotent finish retries. Network travel contributes to the official time. If a finish cannot reach the server, retrying later includes that delay; an accepted finish retried after a lost response retains its original time. This provides basic score integrity, not strong bot protection: the deterministic puzzle engine is distributed with the app. Guest profiles remain device-local unless the player opts into Google Play cloud saves. Private snapshots include the guest credential so a restored save uses the same leaderboard identity. Active ranked-run tickets are not transferred.
 
 Deployment status: AWS is the production backend and its Terraform bootstrap is applied. The committed app has no production endpoint until a verified application apply generates its configuration; the deployment workflow then produces a connected signed release APK and Play upload bundle. Offline play works without a deployed service. See [infrastructure/README.md](infrastructure/README.md) for deployment and approval steps.
 
@@ -102,3 +102,9 @@ API additions: `GET /api/v1/hearts?day=YYYY-MM-DD` and authenticated `POST /api/
 ## Raster fireflies
 
 The board and hint previews use a transparent PNG firefly with dark beetle wing covers, an orange thoracic shield, fine flying wings, and a small glowing tail. Found and random idle animations play painted raster frames from a PNG atlas, with a closed-wing resting pose and reduced-motion and static-hint behavior preserved. The asset is preloaded and cached offline. See [artwork and generation prompt](docs/FIREFLY_ART.md).
+
+## Google Play cloud saves
+
+Version 1.9.0 adds optional Play Games Saved Games in Settings. Guest play remains available; automatic Play Games profile-creation prompts are suppressed. Explicit linking backs up the journey, tools, settings, daily bests, notes, and the current production player profile. Restoring keeps the same online player ID. Independent device/cloud changes require choosing one complete save, with no inventory or hearts merging. A local recovery copy is retained before replacement. Cloud upload can finish later while offline.
+
+The integration is disabled until the public Game Services project ID is configured and Saved Games and Android credentials are enabled in Play Console. See [setup, privacy, testing, and recovery](docs/GOOGLE_PLAY_CLOUD.md). No AWS schema or backend deployment is needed for this integration.

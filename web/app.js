@@ -1,4 +1,7 @@
 import {createFireflyPlayer,FOUND_DURATION} from './firefly-player.js';
+import {cloudBridge} from './cloud-bridge.js';
+import {cloudManager} from './cloud.js';
+import {parseDeviceBackup} from './cloud-state.js';
 import {hintFocus,renderHintBoard} from './hint-overlay.js';
 import {initializeHeartFinds,heartsManager} from './hearts.js';
 import {profileManager} from './profile.js';
@@ -16,6 +19,7 @@ const fly = '<span class="firefly-arrival"><img class="firefly-sprite" src="./as
 const cross = '<svg class="cross-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round"><g stroke="#fffdec" stroke-width="6"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g><g stroke="#234536" stroke-width="3.5"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g></svg>';
 const defaults = () => ({ version:1, installSeed:crypto.getRandomValues(new Uint32Array(1))[0], level:1, completed:0, hints:3, reveals:2, game:null, settings:{ autoCross:false, haptics:true } });
 let state;
+let cloud=null,cloudChoiceCancel=null,restoringCloud=false,nativePaused=false;
 try { state=JSON.parse(localStorage.getItem(STORAGE)); if(state?.version!==1 || !Number.isInteger(state.level) || !state.settings) state=null; } catch {}
 state ||= defaults();
 delete state.settings.targetMode;
@@ -44,7 +48,7 @@ function finishCellMotion(){
 }
 function scheduleIdle(){
   clearTimeout(idleTimer);
-  if(!isPlaying||document.hidden||reducedMotion.matches||$('modal').open)return;
+  if(!isPlaying||nativePaused||document.hidden||reducedMotion.matches||$('modal').open)return;
   idleTimer=setTimeout(()=>{
     const sprites=[...$('board').querySelectorAll('.target:not(.just-found) .firefly-sprite:not([data-firefly-motion])')];
     if(sprites.length){
@@ -66,7 +70,7 @@ if(game&&!game.completed&&game.size!==levelConfig(game.level).size){
 }
 let activeHint=null,messageTimer=null;
 const modal=$('modal');
-function save(){ if(mode==='daily')state.dailyRun=game;else state.game=game; try { localStorage.setItem(STORAGE,JSON.stringify(state)); } catch { message('Your browser cannot save progress. Keep this tab open to continue your game.',true); } }
+function save(){ if(restoringCloud)return;if(mode==='daily')state.dailyRun=game;else state.game=game; try { localStorage.setItem(STORAGE,JSON.stringify(state));cloud?.changed(); } catch { message('Your browser cannot save progress. Keep this tab open to continue your game.',true); } }
 function message(text,important=false){
   const status=$('game-status');status.textContent=text;
   clearTimeout(messageTimer);status.classList.toggle('show-toast',important);
@@ -93,10 +97,11 @@ function showHint(hint,kind){
   $('hint-continue').onclick=close;$('hint-continue').focus();
 }
 function dialog(name,values){cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();}
-function close(){modal.close();finishHint();tick=Date.now();scheduleIdle();}
+function cancelCloudChoice(){const cancel=cloudChoiceCancel;cloudChoiceCancel=null;if(cancel)void cancel();}
+function close(){cancelCloudChoice();modal.close();finishHint();tick=Date.now();scheduleIdle();}
 $('close-modal').onclick=()=>{if(!isPlaying||!game||game.lives>0)close();};
-modal.addEventListener('close',()=>{if(!modal.open){finishHint();tick=Date.now();scheduleIdle();}});
-modal.addEventListener('cancel',e=>{if(isPlaying&&game?.lives<=0)e.preventDefault();});
+modal.addEventListener('close',()=>{if(!modal.open){cancelCloudChoice();finishHint();tick=Date.now();scheduleIdle();}});
+modal.addEventListener('cancel',e=>{if(isPlaying&&game?.lives<=0||cloudChoiceCancel&&cloud?.status().working)e.preventDefault();});
 function cancelTap(){pendingTap=null;}
 function cancelDrag(){
   const previous=drag;drag=null;
@@ -323,7 +328,7 @@ function win(){
   hearts.flush().then(()=>updateJourneyHeartStatus(completedGame));
   state.completed++;state.level++;let reward=false;
   if(state.completed%CARE_PACKAGE_LEVELS===0){state.hints+=2;state.reveals++;reward=true;}
-  save();render();
+  save();render();void cloud?.flush();
   // Let the last firefly finish arriving before covering the board.
   const showCompletion=()=>{
     if(!isPlaying||game!==completedGame)return;
@@ -386,12 +391,76 @@ function showSettings(){
     finally{button.disabled=false;}
   };
   $('more-tools').onclick=()=>{dialog('moreTools');$('extra-hint').onclick=()=>offerReward('hints');$('extra-reveal').onclick=()=>offerReward('reveals');};
+  updateCloudSettings();
+  $('cloud-connect').onclick=async()=>{await cloud.connect();updateCloudSettings();};
+  $('cloud-sync').onclick=async()=>{await cloud.syncNow();updateCloudSettings();};
+  $('cloud-disconnect').onclick=async()=>{try{await cloud.disconnect();}catch(error){$('cloud-status').textContent=error.message;}};
+  $('cloud-recover').onclick=()=>{
+    try{
+      const previous=parseDeviceBackup(localStorage.getItem('firefly-cloud-before-restore-v1'),LEADERBOARD_ORIGIN);
+      dialog('cloudRecovery',{details:`Level ${previous.level} · ${previous.completed} completed · ${previous.hints} hints · ${previous.reveals} reveals`});
+      $('cloud-recovery-cancel').onclick=showSettings;
+      $('cloud-recovery-confirm').onclick=async()=>{
+        $('cloud-recovery-confirm').disabled=true;
+        try{await cloud.disconnect();restoreDeviceState(previous);}
+        catch(error){$('cloud-recovery-error').textContent=error.message;$('cloud-recovery-confirm').disabled=false;}
+      };
+    }catch(error){$('cloud-status').textContent=error.message;}
+  };
 }
+function updateCloudSettings(){
+  if(!cloud)return;
+  const status=cloud.status();
+  if($('cloud-recovery-confirm'))$('cloud-recovery-confirm').disabled=status.working;
+  const choosing=!!$('cloud-choices');$('close-modal').disabled=choosing&&status.working;
+  if(choosing){
+    $('cloud-choices').querySelectorAll('button').forEach(button=>button.disabled=status.working);
+    $('cloud-choice-cancel').disabled=status.working;
+    $('cloud-choice-status').textContent=status.working?'Saving your choice…':'';
+  }
+  if($('cloud-attention'))$('cloud-attention').hidden=!status.attention;
+  if(!$('cloud-status'))return;
+  $('cloud-status').textContent=status.message+(status.enabled&&status.account?' Linked to '+status.account+'.':'');
+  $('cloud-connect').hidden=status.enabled;$('cloud-connect').disabled=!status.available||status.working;
+  $('cloud-sync').hidden=$('cloud-disconnect').hidden=!status.enabled;
+  $('cloud-sync').textContent=status.attention?'Choose a save':'Sync now';
+  $('cloud-sync').disabled=$('cloud-disconnect').disabled=status.working;
+  try{$('cloud-recover').hidden=!localStorage.getItem('firefly-cloud-before-restore-v1');}catch{$('cloud-recover').hidden=true;}
+  $('cloud-recover').disabled=status.working;
+}
+function showCloudConflict(choices,select,cancel){
+  if(isPlaying||restoringCloud)return;
+  dialog('cloudConflict');cloudChoiceCancel=cancel;
+  for(const choice of choices){
+    const button=document.createElement('button');button.className='secondary';
+    const {level,completed,hints,reveals,savedAt}=choice.summary;
+    button.textContent=`${choice.title} · Level ${level} · ${completed} completed · ${hints} hints · ${reveals} reveals${savedAt?' · '+new Date(savedAt).toLocaleString():''}`;
+    button.onclick=async()=>{
+      $('cloud-choices').querySelectorAll('button').forEach(control=>control.disabled=true);
+      try{await select(choice.key);if(!restoringCloud&&!cloud.status().attention){cloudChoiceCancel=null;showSettings();}}
+      catch{cloudChoiceCancel=null;showSettings();}
+    };
+    $('cloud-choices').append(button);
+  }
+  $('cloud-choice-cancel').onclick=()=>{cancelCloudChoice();showSettings();};
+}
+function restoreDeviceState(restored){
+    const backup=localStorage.getItem(STORAGE);
+    if(backup)localStorage.setItem('firefly-cloud-before-restore-v1',backup);
+    localStorage.setItem(STORAGE,JSON.stringify(restored));state=restored;restoringCloud=true;
+    setTimeout(()=>location.reload(),0);
+}
+cloud=cloudManager({bridge:cloudBridge(),storage:localStorage,readState:()=>state,origin:LEADERBOARD_ORIGIN,
+  onStatus:updateCloudSettings,onConflict:showCloudConflict,restore:restoreDeviceState});
+void cloud.initialize();
 $('settings').onclick=showSettings;
-setInterval(()=>{const now=Date.now();if(mode==='journey'&&isPlaying&&game&&!busy&&!game.completed&&game.lives>0&&!document.hidden&&!modal.open){game.elapsed+=Math.min(2,Math.floor((now-tick)/1000));updateTime();if(game.elapsed%10===0)save();}tick=now;},1000);
+$('cloud-attention').onclick=()=>{showSettings();cloud.showChoices();};
+document.addEventListener('firefly-pause',()=>{nativePaused=true;cancelTap();cancelDrag();save();tick=Date.now();stopIdle();finishCellMotion();if(!restoringCloud)void cloud.flush();});
+document.addEventListener('firefly-resume',()=>{nativePaused=false;tick=Date.now();updateTime();scheduleIdle();if(!restoringCloud)void cloud.flush();});
+setInterval(()=>{const now=Date.now();if(mode==='journey'&&isPlaying&&!nativePaused&&game&&!busy&&!game.completed&&game.lives>0&&!document.hidden&&!modal.open){game.elapsed+=Math.min(2,Math.floor((now-tick)/1000));updateTime();if(game.elapsed%10===0)save();}tick=now;},1000);
 setInterval(()=>{if(mode==='daily'&&isPlaying&&game&&!busy&&!document.hidden)updateTime();},100);
 setInterval(()=>{if(!isPlaying)renderHome();},30000);
-document.addEventListener('visibilitychange',()=>{cancelTap();cancelDrag();save();tick=Date.now();if(document.hidden){stopIdle();finishCellMotion();}else{renderHome();updateTime();scheduleIdle();hearts.flush();}});
+document.addEventListener('visibilitychange',()=>{cancelTap();cancelDrag();save();tick=Date.now();if(document.hidden){stopIdle();finishCellMotion();if(!restoringCloud)void cloud.flush();}else{renderHome();updateTime();scheduleIdle();hearts.flush();}});
 render();save();
 if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
@@ -419,7 +488,7 @@ async function submitRace(run){
   if(!run.online||submittingRaces.has(run))return;submittingRaces.add(run);delete run.online.error;updateRaceStatus(run);
   try{if(state.leaderboardProfile?.id!==run.online.profileId)throw Error('This race belongs to a different player profile.');run.online.result=await raceApi('finish',{method:'POST',profile:state.leaderboardProfile,body:{runId:run.online.runId,finds:run.rankedFinds}});run.online.status='finished';}
   catch(error){run.online.error=error.message+' Retry when connected; the server clock keeps running until your finish arrives.';}
-  finally{submittingRaces.delete(run);delete run.online.sending;try{localStorage.setItem(STORAGE,JSON.stringify(state));}catch{}updateRaceStatus(run);}
+  finally{submittingRaces.delete(run);delete run.online.sending;try{if(!restoringCloud){localStorage.setItem(STORAGE,JSON.stringify(state));cloud?.changed();}}catch{}updateRaceStatus(run);}
 }
 const rankingButton=document.createElement('button');rankingButton.id='leaderboard';rankingButton.className='secondary leaderboard-button';rankingButton.textContent='Speed leaderboard ◷';rankingButton.onclick=()=>showLeaderboard();$('daily-best').before(rankingButton);
 

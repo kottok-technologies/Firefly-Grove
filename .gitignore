@@ -1,6 +1,7 @@
 node_modules/
 android/.gradle/
 android/local.properties
+android/play-games.properties
 android/**/build/
 *.apk
 *.aab
