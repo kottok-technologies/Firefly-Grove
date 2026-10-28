@@ -1,3 +1,4 @@
+import {createFireflyPlayer,FOUND_DURATION} from './firefly-player.js';
 import {hintFocus,renderHintBoard} from './hint-overlay.js';
 import {initializeHeartFinds,heartsManager} from './hearts.js';
 import {profileManager} from './profile.js';
@@ -11,7 +12,7 @@ const STORAGE = 'firefly-grove-v1';
 const DOUBLE_TAP_MS = 600;
 const CARE_PACKAGE_LEVELS = 10;
 const palette = ['#d9e5ba','#e6c2a9','#c6dcd6','#e7d9a4','#cfc9e2','#b8d4ac','#e4c7ce','#bfcde0','#e3c49a','#c1dfc2','#d7d3ac','#c9bee0','#dbbcae','#b8d9dd'];
-const fly = '<span class="firefly-arrival"><img class="firefly-sprite" src="./assets/firefly.png?v=2" alt="" aria-hidden="true" draggable="false" width="1402" height="1122" decoding="async"></span>';
+const fly = '<span class="firefly-arrival"><img class="firefly-sprite" src="./assets/firefly.png?v=3" alt="" aria-hidden="true" draggable="false" width="256" height="256" decoding="async"></span>';
 const cross = '<svg class="cross-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round"><g stroke="#fffdec" stroke-width="6"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g><g stroke="#234536" stroke-width="3.5"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g></svg>';
 const defaults = () => ({ version:1, installSeed:crypto.getRandomValues(new Uint32Array(1))[0], level:1, completed:0, hints:3, reveals:2, game:null, settings:{ autoCross:false, haptics:true } });
 let state;
@@ -32,23 +33,23 @@ let mode='journey';
 if(game&&!game.completed)initializeHeartFinds(game);
 let drag=null,suppressDragClick=false;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
-const idleClasses=['idle-bob','idle-wiggle','idle-flutter'];
+const fireflies=createFireflyPlayer();
 function stopIdle(){
   clearTimeout(idleTimer);idleTimer=null;
-  document.querySelectorAll('.firefly-sprite').forEach(sprite=>sprite.classList.remove(...idleClasses));
+  fireflies.stop('idle');
 }
 function finishCellMotion(){
+  fireflies.stop('found');
   $('board').querySelectorAll('.just-found,.just-crossed').forEach(cell=>cell.classList.remove('just-found','just-crossed'));
 }
 function scheduleIdle(){
   clearTimeout(idleTimer);
   if(!isPlaying||document.hidden||reducedMotion.matches||$('modal').open)return;
   idleTimer=setTimeout(()=>{
-    const sprites=[...$('board').querySelectorAll('.target:not(.just-found) .firefly-sprite')];
+    const sprites=[...$('board').querySelectorAll('.target:not(.just-found) .firefly-sprite:not([data-firefly-motion])')];
     if(sprites.length){
       const sprite=sprites[Math.floor(Math.random()*sprites.length)];
-      sprite.classList.remove(...idleClasses);
-      sprite.classList.add(idleClasses[Math.floor(Math.random()*idleClasses.length)]);
+      fireflies.play(sprite,'idle');
     }
     scheduleIdle();
   },2400+Math.random()*4200);
@@ -76,7 +77,8 @@ function finishHint(){
   const hint=activeHint;activeHint=null;hint.cleanup();
   document.body.classList.remove('hint-preview-open');modal.classList.remove('hint-overlay');
   modal.removeAttribute('aria-labelledby');modal.removeAttribute('aria-describedby');
-  hint.onContinue?.();
+  if(hint.game===game&&isPlaying&&!reducedMotion.matches)for(const i of hint.foundCells)playFound($('board').children[i]);
+  if(hint.onContinue){if(hint.foundCells.length&&!reducedMotion.matches)setTimeout(hint.onContinue,FOUND_DURATION+40);else hint.onContinue();}
 }
 function showHint(hint,kind){
   dialog('hintDetails');finishCellMotion();
@@ -87,7 +89,7 @@ function showHint(hint,kind){
   }
   modal.classList.add('hint-overlay');modal.setAttribute('aria-labelledby','hint-title');modal.setAttribute('aria-describedby','full-explanation');
   document.body.classList.add('hint-preview-open');
-  activeHint={cleanup:renderHintBoard($('hint-board-stage'),$('board'),hintFocus(game,hint),hint.cells)};
+  activeHint={game,foundCells:hint.target?hint.cells:[],cleanup:renderHintBoard($('hint-board-stage'),$('board'),hintFocus(game,hint),hint.cells)};
   $('hint-continue').onclick=close;$('hint-continue').focus();
 }
 function dialog(name,values){cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();}
@@ -215,11 +217,15 @@ function render(){
     const row=Math.floor(i/game.size),col=i%game.size;
     cell.setAttribute('aria-label',`Row ${row+1}, column ${col+1}, color ${game.regions[i]+1}${value===1?', crossed out':value===2?', firefly':''}`);
     cell.setAttribute('aria-pressed',String(value!==0));
-    if(value===2){cell.insertAdjacentHTML('beforeend',fly);if(!fresh&&!reducedMotion.matches)cell.classList.add('just-found');}
+    if(value===2){cell.insertAdjacentHTML('beforeend',fly);if(!fresh&&!reducedMotion.matches)playFound(cell);}
     if(value===1&&!fresh&&!reducedMotion.matches)cell.classList.add('just-crossed');
   });
   if(fresh)scheduleIdle();
   updateTime();
+}
+function playFound(cell){
+  const sprite=cell.querySelector('.firefly-sprite');if(!sprite)return;
+  cell.classList.add('just-found');fireflies.play(sprite,'found',()=>cell.classList.remove('just-found'));
 }
 function updateTime(){if(game)$('time').textContent=mode==='daily'?formatSpeed(dailyElapsed(game)):`${String(Math.floor(game.elapsed/60)).padStart(2,'0')}:${String(game.elapsed%60).padStart(2,'0')}`;}
 async function newLevel(restart=false){
@@ -301,9 +307,7 @@ $('board').addEventListener('click',e=>{
 $('board').addEventListener('dblclick',e=>e.preventDefault());
 $('board').addEventListener('animationend',e=>{
   const cell=e.target.closest('[data-cell]');if(!cell)return;
-  if(e.animationName==='firefly-found')cell.classList.remove('just-found');
   if(e.animationName==='cross-cell-confirm')cell.classList.remove('just-crossed');
-  if(e.animationName.startsWith('firefly-idle-'))e.target.classList.remove(...idleClasses);
 });
 $('board').addEventListener('contextmenu',e=>{
   const cell=e.target.closest('[data-cell]');if(!cell)return;
@@ -328,7 +332,7 @@ function win(){
     $('journey-hearts-board').onclick=()=>showHeartsLeaderboard(completedGame.heartCompletion?.body.day);
     $('next-level').onclick=()=>{close();newLevel();};
   };
-  if(activeHint)activeHint.onContinue=showCompletion;else setTimeout(showCompletion,reducedMotion.matches?0:740);
+  if(activeHint)activeHint.onContinue=showCompletion;else setTimeout(showCompletion,reducedMotion.matches?0:FOUND_DURATION+40);
 }
 function winDaily(){
   const result=recordDailyResult(state.dailyRecords,game);if(!result)return;
@@ -342,7 +346,7 @@ function winDaily(){
     const status=document.createElement('p');status.id='race-status';status.setAttribute('aria-live','polite');$('daily-again').before(status);
     const retry=document.createElement('button');retry.id='race-submit';retry.className='secondary';retry.textContent='Retry score upload';retry.onclick=()=>submitRace(completedGame);$('daily-again').before(retry);
     const board=document.createElement('button');board.className='secondary';board.textContent='Leaderboard';board.onclick=()=>showLeaderboard(completedGame.dailyDay);$('daily-again').before(board);updateRaceStatus(completedGame);
-  },reducedMotion.matches?0:740);
+  },reducedMotion.matches?0:FOUND_DURATION+40);
 }
 function showLoss(){
   if(mode==='daily'){

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile,readdir,access} from 'node:fs/promises';
 import {parseDocument} from 'yaml';
+import {fireflyFrames} from '../web/firefly-frames.js';
 const root=new URL('../',import.meta.url),read=path=>readFile(new URL(path,root),'utf8');
 for(const file of await readdir(new URL('.github/workflows/',root))){
   if(!/\.ya?ml$/.test(file))continue;
@@ -39,10 +40,23 @@ for(const directory of ['', 'aws-leaderboard/']){
 }
 const manifest=JSON.parse(await read('package.json')),gradle=await read('android/app/build.gradle');assert.ok(gradle.includes(`versionName '${manifest.version}'`),'Android and npm versions differ');
 assert.match(await read('android/gradle/wrapper/gradle-wrapper.properties'),/^distributionSha256Sum=[a-f0-9]{64}$/m,'Gradle distribution checksum required');
-for(const file of ['web/assets/firefly.png','web/hint-overlay.js','web/hearts.js','web/profile.js','web/engine.js','web/daily.js','web/gestures.js','web/leaderboard-client.js','web/leaderboard-config.js']){
+for(const file of ['web/firefly-player.js','web/firefly-frames.js','web/assets/firefly-atlas.png','web/assets/firefly.png','web/hint-overlay.js','web/hearts.js','web/profile.js','web/engine.js','web/daily.js','web/gestures.js','web/leaderboard-client.js','web/leaderboard-config.js']){
   await access(new URL(file,root));assert.ok((await read('web/sw.js')).includes('./'+file.slice(4)),`${file}: missing offline cache entry`);
 }
 for(const file of ['engine.js','daily.js'])assert.equal(await read('web/'+file),await read('aws-leaderboard/src/'+file),`${file}: AWS puzzle copy is stale`);
 const firefly=await readFile(new URL('web/assets/firefly.png',root));
 assert.equal(firefly.subarray(0,8).toString('hex'),'89504e470d0a1a0a','The firefly asset must be a real raster PNG');
+assert.equal(firefly.readUInt32BE(16),fireflyFrames.size);
+assert.equal(firefly.readUInt32BE(20),fireflyFrames.size);
+const atlas=await readFile(new URL('web/assets/firefly-atlas.png',root));
+assert.equal(atlas.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+assert.equal(atlas.readUInt32BE(16),fireflyFrames.size*fireflyFrames.columns);
+const rows=atlas.readUInt32BE(20)/fireflyFrames.size;
+assert.ok(Number.isInteger(rows)&&rows>0);
+for(const sequence of Object.values(fireflyFrames.animations)){
+  assert.equal(sequence.frames.length,sequence.durations.length);
+  assert.equal(sequence.frames.at(-1),fireflyFrames.rest,'Sequences must finish with closed wings');
+  for(const frame of sequence.frames)assert.ok(Number.isInteger(frame)&&frame>=0&&frame<rows*fireflyFrames.columns);
+  for(const duration of sequence.durations)assert.ok(Number.isInteger(duration)&&duration>0);
+}
 console.log('Workflow YAML, action pins, lockfiles, versions, wrapper checksum, offline assets, and shared engine copies are valid.');
