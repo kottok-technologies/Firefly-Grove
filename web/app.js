@@ -11,7 +11,7 @@ const STORAGE = 'firefly-grove-v1';
 const DOUBLE_TAP_MS = 600;
 const CARE_PACKAGE_LEVELS = 10;
 const palette = ['#d9e5ba','#e6c2a9','#c6dcd6','#e7d9a4','#cfc9e2','#b8d4ac','#e4c7ce','#bfcde0','#e3c49a','#c1dfc2','#d7d3ac','#c9bee0','#dbbcae','#b8d9dd'];
-const fly = '<span class="firefly-arrival"><img class="firefly-sprite" src="./assets/firefly.png" alt="" aria-hidden="true" draggable="false" width="1254" height="1254" decoding="async"></span>';
+const fly = '<span class="firefly-arrival"><img class="firefly-sprite" src="./assets/firefly.png?v=2" alt="" aria-hidden="true" draggable="false" width="1402" height="1122" decoding="async"></span>';
 const cross = '<svg class="cross-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round"><g stroke="#fffdec" stroke-width="6"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g><g stroke="#234536" stroke-width="3.5"><path class="cross-line" pathLength="1" d="M8 8 24 24"/><path class="cross-line cross-second" pathLength="1" d="M24 8 8 24"/></g></svg>';
 const defaults = () => ({ version:1, installSeed:crypto.getRandomValues(new Uint32Array(1))[0], level:1, completed:0, hints:3, reveals:2, game:null, settings:{ autoCross:false, haptics:true } });
 let state;

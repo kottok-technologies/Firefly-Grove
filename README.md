@@ -101,4 +101,4 @@ API additions: `GET /api/v1/hearts?day=YYYY-MM-DD` and authenticated `POST /api/
 
 ## Raster fireflies
 
-The board and hint previews use a transparent PNG firefly with a round striped lantern body, a distinct face, and broad wings. Found and random idle animations animate the raster sprite, with reduced-motion and static-hint behavior preserved. The asset is preloaded and cached offline. See [artwork and generation prompt](docs/FIREFLY_ART.md).
+The board and hint previews use a transparent PNG firefly with dark beetle wing covers, an orange thoracic shield, fine flying wings, and a small glowing tail. Found and random idle animations animate the raster sprite, with reduced-motion and static-hint behavior preserved. The asset is preloaded and cached offline. See [artwork and generation prompt](docs/FIREFLY_ART.md).
