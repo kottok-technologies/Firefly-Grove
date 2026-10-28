@@ -433,6 +433,9 @@ function updateJourneyHeartStatus(run){
 }
 $('hearts-leaderboard').onclick=()=>showHeartsLeaderboard();
 async function showHeartsLeaderboard(day=dailyKey()){
+  // The leaderboard replaces the completion dialog. Leave a playable home
+  // screen behind it so every dismissal path avoids the finished puzzle.
+  if(isPlaying&&game?.completed)showHome();
   dialog('heartsLeaderboard');
   $('hearts-day').value=day;$('hearts-day').max=dailyKey();$('hearts-day').min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
   $('hearts-day').onchange=()=>showHeartsLeaderboard($('hearts-day').value);$('hearts-refresh').onclick=()=>showHeartsLeaderboard(day);

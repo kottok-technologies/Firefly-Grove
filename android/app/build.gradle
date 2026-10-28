@@ -15,8 +15,8 @@ android {
         applicationId 'com.fireflygrove.game'
         minSdk 26
         targetSdk 36
-        versionCode 18
-        versionName '1.7.1'
+        versionCode 19
+        versionName '1.7.2'
     }
     signingConfigs {
         release {
