@@ -46,7 +46,7 @@ Daily browser checks used an isolated in-memory save: they covered no automatic 
 
 ## Procedural generation
 
-Each installation has a random seed; each successive level derives a distinct seed from it. Completed/generated layouts are recorded locally and duplicate layouts are rejected. Targets are a row/column permutation with non-touching diagonals. Connected regions grow from those targets in a deduction order: every added non-target cell is ruled out by an earlier target. A constrained solver independently verifies the unique solution.
+Each installation has a random seed; each successive level derives a distinct seed from it. Completed/generated layouts are recorded locally and duplicate layouts are rejected. Targets are a row/column permutation with non-touching diagonals. Connected regions first grow from those targets. Training and legacy layouts use an ordered deduction chain. Post-training journey layouts then change connected boundaries while preserving the unique solution, and are accepted only after a logical grader verifies that basic single-candidate chains stall and explained deductions complete the puzzle. A constrained solver independently verifies uniqueness.
 
 Every new puzzle has exactly 1–3 single-cell regions. The count is selected before generation retries: 85% one, 13% two, and 2% three, for an expected mean of 1.17. Other regions receive at least two cells. Growth favors smaller regions, and no region can exceed 1.8 times the average size of the non-singleton regions, rounded up. Generation never relaxes these constraints to finish a difficult batch.
 
@@ -97,7 +97,7 @@ Regular journey levels now contribute their remaining 1–3 hearts to a shared d
 
 The app records find attempts, tool reveals, and life restores. The server regenerates the puzzle and replays that history to calculate hearts instead of trusting a claimed total. Tools and valid life restores remain available. In-progress puzzles migrate their current finds and mistakes; earlier completed levels are not imported retroactively. Offline completions queue on the device, retry when connected, and must upload on the same UTC day they finish. They never roll into the next day’s ranking. Server transactions prevent duplicated or lost points from retries and concurrent completions.
 
-API additions: `GET /api/v1/hearts?day=YYYY-MM-DD` and authenticated `POST /api/v1/journey/finish` (`version: journey-v1`, completion day, level, seed, and find history). Existing Lambda/DynamoDB resources and runtime permissions are reused. Receipts are permanent per player/level; daily totals expire after 92 days. Logical completion validation is not strong bot protection, since the deterministic puzzle engine is distributed with the app.
+API additions: `GET /api/v1/hearts?day=YYYY-MM-DD` and authenticated `POST /api/v1/journey/finish` (`version: journey-v1` for legacy/training layouts or `journey-v2` for graded journey layouts, completion day, level, seed, and find history). Existing Lambda/DynamoDB resources and runtime permissions are reused. Receipts are permanent per player/level; daily totals expire after 92 days. Logical completion validation is not strong bot protection, since the deterministic puzzle engine is distributed with the app.
 
 ## Raster fireflies
 
