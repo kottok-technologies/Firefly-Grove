@@ -49,3 +49,33 @@ dialog.hint-overlay{position:fixed;inset:0;margin:0;width:100%;max-width:none;he
 
 /* Finished puzzles keep a direct way forward on the board. */
 .board-wrap.is-complete>.board{filter:brightness(.38) saturate(.45)}.board-complete{position:absolute;inset:4px;display:grid;place-items:center;border-radius:6px;z-index:1}.board-complete-content{width:min(80%,260px);text-align:center}.board-complete-content p{color:#fffdf0;font-size:clamp(18px,5vw,25px);font-weight:650;margin:0 0 16px;text-shadow:0 1px 5px #10251e80}.board-complete .primary{margin:0;min-height:52px;font-size:16px;font-weight:650;background:#f2e6a6;color:#294d3e;box-shadow:0 4px 18px #10251e40}.board-wrap .loading{z-index:2}
+
+/* Short, interruptible scene changes; layout and touch targets stay still. */
+.app-shell{view-transition-name:grove-screen}
+::view-transition{pointer-events:none}
+::view-transition-old(root),::view-transition-new(root){animation:none}
+::view-transition-old(grove-screen){animation:scene-away 240ms ease both}
+::view-transition-new(grove-screen){animation:scene-arrive 280ms cubic-bezier(.2,.8,.2,1) both}
+:root[data-navigation="back"]{--scene-direction:-1}
+:root[data-navigation="forward"]{--scene-direction:1}
+@keyframes scene-away{to{opacity:0;transform:translateX(calc(-16px * var(--scene-direction,1)))}}
+@keyframes scene-arrive{from{opacity:0;transform:translateX(calc(20px * var(--scene-direction,1)))}to{opacity:1;transform:none}}
+dialog{opacity:0;transform:translateY(14px) scale(.975);transition:opacity 180ms ease,transform 220ms cubic-bezier(.2,.8,.2,1),display 220ms allow-discrete,overlay 220ms allow-discrete}
+dialog[open]{opacity:1;transform:none}
+dialog::backdrop{opacity:0;transition:opacity 180ms ease,display 220ms allow-discrete,overlay 220ms allow-discrete}
+dialog[open]::backdrop{opacity:1}
+@starting-style{dialog[open]{opacity:0;transform:translateY(14px) scale(.975)}dialog[open]::backdrop{opacity:0}}
+dialog.hint-overlay{transform:none}
+@starting-style{dialog.hint-overlay[open]{transform:none}}
+.hint-overlay-card{animation:guidance-arrive 240ms cubic-bezier(.2,.8,.2,1) both}
+@keyframes guidance-arrive{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.board-wrap>.board{transition:filter 260ms ease,opacity 180ms ease}
+.board-wrap.is-generating>.board{opacity:.25}
+.board-complete-content{animation:complete-arrive 300ms cubic-bezier(.2,.8,.2,1) both}
+@keyframes complete-arrive{from{opacity:0;transform:translateY(10px) scale(.94)}to{opacity:1;transform:none}}
+.loading{animation:guidance-arrive 180ms ease both}
+.ranking-row{animation:guidance-arrive 220ms ease both}
+.ranking-row:nth-child(2){animation-delay:25ms}.ranking-row:nth-child(3){animation-delay:50ms}.ranking-row:nth-child(n+4){animation-delay:75ms}
+.primary,.secondary,.icon-button,.tool{transition:transform 100ms ease,background-color 160ms ease,opacity 160ms ease}
+.primary:active,.secondary:active,.icon-button:active,.tool:active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}dialog,dialog::backdrop{transition:none!important}}

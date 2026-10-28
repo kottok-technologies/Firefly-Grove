@@ -1,3 +1,4 @@
+import {createMotion} from './motion.js';
 import {createFireflyPlayer,FOUND_DURATION} from './firefly-player.js';
 import {cloudBridge} from './cloud-bridge.js';
 import {cloudManager} from './cloud.js';
@@ -37,6 +38,7 @@ let mode='journey';
 if(game&&!game.completed)initializeHeartFinds(game);
 let drag=null,suppressDragClick=false;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+const motion=createMotion(document,reducedMotion);
 const fireflies=createFireflyPlayer();
 function stopIdle(){
   clearTimeout(idleTimer);idleTimer=null;
@@ -96,7 +98,7 @@ function showHint(hint,kind){
   activeHint={game,foundCells:hint.target?hint.cells:[],cleanup:renderHintBoard($('hint-board-stage'),$('board'),hintFocus(game,hint),hint.cells)};
   $('hint-continue').onclick=close;$('hint-continue').focus();
 }
-function dialog(name,values){cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();}
+function dialog(name,values){cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');const replacing=modal.open;renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();if(replacing)motion.enter($('modal-content'));}
 function cancelCloudChoice(){const cancel=cloudChoiceCancel;cloudChoiceCancel=null;if(cancel)void cancel();}
 function close(){cancelCloudChoice();modal.close();finishHint();tick=Date.now();scheduleIdle();}
 $('close-modal').onclick=()=>{if(!isPlaying||!game||game.lives>0)close();};
@@ -127,17 +129,16 @@ function renderHome(){
   if(!$('daily-previous').hidden)$('daily-previous').textContent=`Continue unfinished run · ${previous.dailyDay}`;
 }
 function showHome(){
-  cancelTap();cancelDrag();close();isPlaying=false;stopIdle();finishCellMotion();document.body.classList.remove('playing');
-  $('puzzle-screen').hidden=true;$('landing-screen').hidden=false;
-  tick=Date.now();save();renderHome();$('play').focus();
+  cancelTap();cancelDrag();close();isPlaying=false;stopIdle();finishCellMotion();
+  motion.screen(()=>{document.body.classList.remove('playing');$('puzzle-screen').hidden=true;$('landing-screen').hidden=false;$('play').focus();return $('landing-screen');},'back');
+  tick=Date.now();save();renderHome();
 }
 window.returnToLanding=()=>{if(!isPlaying)return false;showHome();return true;};
 $('back-home').onclick=showHome;
 $('play').onclick=async()=>{
   if(busy)return;
   cancelTap();cancelDrag();save();mode='journey';game=state.game;
-  isPlaying=true;$('landing-screen').hidden=true;$('puzzle-screen').hidden=false;
-  document.body.classList.add('playing');tick=Date.now();
+  isPlaying=true;motion.screen(()=>{$('landing-screen').hidden=true;$('puzzle-screen').hidden=false;document.body.classList.add('playing');return $('puzzle-screen');});tick=Date.now();
   if(!game||game.completed)await newLevel();else{render();message('Welcome back. Every row, column, and color holds exactly one firefly.');}
   scheduleIdle();
   if(isPlaying&&game?.lives<=0)showLoss();
@@ -146,8 +147,7 @@ async function enterDaily(day,fresh=false,ranked=false){
   if(busy)return;
   cancelTap();cancelDrag();save();mode='daily';
   game=!fresh&&state.dailyRun?.dailyDay===day?state.dailyRun:null;
-  isPlaying=true;$('landing-screen').hidden=true;$('puzzle-screen').hidden=false;
-  document.body.classList.add('playing');tick=Date.now();
+  isPlaying=true;motion.screen(()=>{$('landing-screen').hidden=true;$('puzzle-screen').hidden=false;document.body.classList.add('playing');return $('puzzle-screen');});tick=Date.now();
   if(!game||game.completed||game.lives<=0)await newDailyRun(day,ranked);
   else{beginDailyRun(game);render();save();message('Daily speed run: no tools or automatic crosses. The clock keeps running if you leave.');}
   scheduleIdle();
@@ -163,6 +163,7 @@ $('daily-play').onclick=()=>{
 $('daily-previous').onclick=()=>{if(state.dailyRun)enterDaily(state.dailyRun.dailyDay);};
 async function newDailyRun(day,ranked=!!game?.online){
   cancelTap();cancelDrag();busy=true;game=null;renderedGame=null;
+  $('board-wrap').classList.add('is-generating');
   $('board-complete').hidden=true;$('board-wrap').classList.remove('is-complete');
   $('board').replaceChildren();$('loading').hidden=false;
   $('level-prefix').textContent='Daily';$('level').textContent='';$('chapter').textContent='DAILY SPEED CHALLENGE';
@@ -246,7 +247,7 @@ function playFound(cell){
 function updateTime(){if(game)$('time').textContent=mode==='daily'?formatSpeed(dailyElapsed(game)):`${String(Math.floor(game.elapsed/60)).padStart(2,'0')}:${String(game.elapsed%60).padStart(2,'0')}`;}
 async function newLevel(restart=false){
   if(mode==='daily')return newDailyRun(game?.dailyDay||dailyKey());
-  cancelTap();cancelDrag();busy=true;$('board-complete').hidden=true;$('board-wrap').classList.remove('is-complete');$('loading').hidden=false;$('hint').disabled=$('reveal').disabled=true;
+  cancelTap();cancelDrag();busy=true;$('board-wrap').classList.add('is-generating');$('board-complete').hidden=true;$('board-wrap').classList.remove('is-complete');$('loading').hidden=false;$('hint').disabled=$('reveal').disabled=true;
   if(restart){game={...game,marks:Array(game.size**2).fill(0),lives:3,mistakes:0,elapsed:0,completed:false,heartFinds:[],heartCompletion:null};game.givens.forEach(i=>game.marks[i]=2);finishLoad();return;}
   let seed=(state.installSeed+Math.imul(state.level,2654435761))>>>0;
   try{
@@ -258,7 +259,7 @@ async function newLevel(restart=false){
   state.puzzleKeys.push(puzzleKey(game));
   finishLoad();
 }
-function finishLoad(){if(mode==='journey')initializeHeartFinds(game);busy=false;$('home-note').hidden=true;$('loading').hidden=true;$('hint').disabled=$('reveal').disabled=false;tick=Date.now();render();save();message(game.givens.length?`${game.givens.length===2?'Two fireflies have':'One firefly has'} already settled in. Let's find their friends.`:'A fresh patch of the grove. Take your time and follow the colors.');}
+function finishLoad(){$('board-wrap').classList.remove('is-generating');if(mode==='journey')initializeHeartFinds(game);busy=false;$('home-note').hidden=true;$('loading').hidden=true;$('hint').disabled=$('reveal').disabled=false;tick=Date.now();render();motion.enter($('board-wrap'),'board');save();message(game.givens.length?`${game.givens.length===2?'Two fireflies have':'One firefly has'} already settled in. Let's find their friends.`:'A fresh patch of the grove. Take your time and follow the colors.');}
 function vibrate(){if(state.settings.haptics)navigator.vibrate?.(50);}
 function autoCross(){if(mode==='daily'||!state.settings.autoCross)return;const n=game.size,targets=game.marks.flatMap((v,i)=>v===2?[i]:[]);game.marks.forEach((v,i)=>{if(!v&&!isTarget(game,i)&&targets.some(t=>Math.floor(t/n)===Math.floor(i/n)||t%n===i%n||game.regions[t]===game.regions[i]||(Math.abs(Math.floor(t/n)-Math.floor(i/n))<=1&&Math.abs(t%n-i%n)<=1)))game.marks[i]=1;});}
 function move(i,target){
