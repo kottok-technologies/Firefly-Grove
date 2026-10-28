@@ -1,3 +1,4 @@
+import {hintFocus,renderHintBoard} from './hint-overlay.js';
 import {initializeHeartFinds,heartsManager} from './hearts.js';
 import {profileManager} from './profile.js';
 import {renderDialog} from './dialogs.js';
@@ -62,22 +63,37 @@ if(game&&!game.completed&&game.size!==levelConfig(game.level).size){
   $('home-note').hidden=false;
   $('home-note').textContent='Your level will use the new smaller grid. Your tools and milestone progress are kept.';
 }
-let lastMessage={text:'Two fireflies have already settled in. Let’s find their friends.',colors:[]};
+let activeHint=null,messageTimer=null;
 const modal=$('modal');
-function save(){ if(mode==='daily')state.dailyRun=game;else state.game=game; try { localStorage.setItem(STORAGE,JSON.stringify(state)); } catch { message('Your browser cannot save progress. Keep this tab open to continue your game.'); } }
-function message(text,colors=[]){
-  lastMessage={text,colors};$('message-details').hidden=text.length<50;
-  const paragraph=$('message-text');paragraph.textContent='';
-  for(const color of colors){
-    const chip=document.createElement('span');chip.className='hint-color';
-    chip.style.background=palette[color];chip.textContent=color+1;
-    chip.setAttribute('aria-label',`Color ${color+1}`);paragraph.append(chip);
-  }
-  paragraph.append(document.createTextNode(text));
+function save(){ if(mode==='daily')state.dailyRun=game;else state.game=game; try { localStorage.setItem(STORAGE,JSON.stringify(state)); } catch { message('Your browser cannot save progress. Keep this tab open to continue your game.',true); } }
+function message(text,important=false){
+  const status=$('game-status');status.textContent=text;
+  clearTimeout(messageTimer);status.classList.toggle('show-toast',important);
+  if(important)messageTimer=setTimeout(()=>status.classList.remove('show-toast'),4000);
 }
-function dialog(name,values){cancelTap();cancelDrag();stopIdle();renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();}
-function close(){modal.close();tick=Date.now();scheduleIdle();}
+function finishHint(){
+  if(!activeHint)return;
+  const hint=activeHint;activeHint=null;hint.cleanup();
+  document.body.classList.remove('hint-preview-open');modal.classList.remove('hint-overlay');
+  modal.removeAttribute('aria-labelledby');modal.removeAttribute('aria-describedby');
+  hint.onContinue?.();
+}
+function showHint(hint,kind){
+  dialog('hintDetails');finishCellMotion();
+  $('hint-title').textContent=kind==='reveals'?'A FIREFLY REVEALED':'A LITTLE GUIDANCE';
+  $('full-explanation').textContent=hint.text;
+  for(const color of hint.colors||[]){
+    const chip=document.createElement('span');chip.className='hint-color';chip.style.background=palette[color];chip.textContent='Color '+(color+1);$('hint-colors').append(chip);
+  }
+  modal.classList.add('hint-overlay');modal.setAttribute('aria-labelledby','hint-title');modal.setAttribute('aria-describedby','full-explanation');
+  document.body.classList.add('hint-preview-open');
+  activeHint={cleanup:renderHintBoard($('hint-board-stage'),$('board'),hintFocus(game,hint),hint.cells)};
+  $('hint-continue').onclick=close;$('hint-continue').focus();
+}
+function dialog(name,values){cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();}
+function close(){modal.close();finishHint();tick=Date.now();scheduleIdle();}
 $('close-modal').onclick=()=>{if(!isPlaying||!game||game.lives>0)close();};
+modal.addEventListener('close',()=>{if(!modal.open){finishHint();tick=Date.now();scheduleIdle();}});
 modal.addEventListener('cancel',e=>{if(isPlaying&&game?.lives<=0)e.preventDefault();});
 function cancelTap(){pendingTap=null;}
 function cancelDrag(){
@@ -158,10 +174,6 @@ async function newDailyRun(day,ranked=!!game?.online){
   if(isPlaying)beginDailyRun(game);
   finishLoad();message('The clock is running. Find all eight fireflies—no tools, just your logic.');
 }
-$('message-details').onclick=()=>{
-  dialog('hintDetails');
-  $('full-explanation').textContent=lastMessage.text;
-};
 $('care-package').onclick=()=>dialog('carePackage',{progress:`You have completed ${state.completed} levels. ${CARE_PACKAGE_LEVELS-state.completed%CARE_PACKAGE_LEVELS} more to your next package.`});
 new ResizeObserver(([entry])=>{
   const side=Math.floor(Math.min(entry.contentRect.width,entry.contentRect.height));
@@ -234,7 +246,7 @@ function move(i,target){
   if(target&&mode==='journey')game.heartFinds.push(i);
   if(target&&mode==='daily'&&game.online?.status==='active')game.rankedFinds.push(i);
   if(mode==='daily'&&game.lives===0)freezeDailyRun(game);
-  if(result==='mistake'){vibrate();message('No firefly here. Take a breath and look at the colors. One life lost.');}
+  if(result==='mistake'){vibrate();message('No firefly here. One life lost.',true);}
   else {autoCross();if(target)message('A little light found. Every row, column, and color has just one.');}
   render();save();
   if(result==='mistake')$('board').children[i].classList.add('error');
@@ -309,13 +321,14 @@ function win(){
   if(state.completed%CARE_PACKAGE_LEVELS===0){state.hints+=2;state.reveals++;reward=true;}
   save();render();
   // Let the last firefly finish arriving before covering the board.
-  setTimeout(()=>{
+  const showCompletion=()=>{
     if(!isPlaying||game!==completedGame)return;
     dialog('journeyWin',{details:`Every firefly found its home. Level ${game.level} complete in ${$("time").textContent}, with ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}.`,next:`Wander to level ${state.level} →`});
     $('win-reward').hidden=!reward;updateJourneyHeartStatus(completedGame);
     $('journey-hearts-board').onclick=()=>showHeartsLeaderboard(completedGame.heartCompletion?.body.day);
     $('next-level').onclick=()=>{close();newLevel();};
-  },reducedMotion.matches?0:740);
+  };
+  if(activeHint)activeHint.onContinue=showCompletion;else setTimeout(showCompletion,reducedMotion.matches?0:740);
 }
 function winDaily(){
   const result=recordDailyResult(state.dailyRecords,game);if(!result)return;
@@ -346,12 +359,12 @@ function offerReward(kind){
   $('reward-back').onclick=()=>{if(isPlaying&&game?.lives===0)showLoss();else close();};
 }
 function tool(kind){
-  cancelTap();cancelDrag();if(!isPlaying||busy||!game||game.completed)return;if(game.lives<=0){showLoss();return;}
+  cancelTap();cancelDrag();if(!isPlaying||busy||modal.open||!game||game.completed)return;if(game.lives<=0){showLoss();return;}
   if(mode==='daily'){message('Daily speed challenges have no hints or reveals. Your tools have not been spent.');return;}
   if(state[kind]<=0){offerReward(kind);return;}
   const hint=kind==='hints'?findHint(game):{cells:[game.marks.findIndex((v,i)=>v!==2&&isTarget(game,i))],target:true,text:'A hidden friend, brought into the light. See what this firefly tells you about its row, column, and color.'};
-  if(!hint){message('No explained deduction is available right now. Try checking your crosses or finding another firefly. No tool was spent.');return;}
-  state[kind]--;for(const i of hint.cells){const result=applyMove(game,i,hint.target);if(hint.target&&result!=='ignored')game.heartFinds.push(i);}autoCross();render();message(hint.text,hint.colors);hint.cells.forEach(i=>$('board').children[i].classList.add('flash'));save();if(game.completed)win();
+  if(!hint){showHint({cells:[],text:'No explained deduction is available right now. Try checking your crosses or finding another firefly. No tool was spent.'},kind);return;}
+  state[kind]--;for(const i of hint.cells){const result=applyMove(game,i,hint.target);if(hint.target&&result!=='ignored')game.heartFinds.push(i);}autoCross();render();save();showHint(hint,kind);if(game.completed)win();
 }
 $('hint').onclick=()=>tool('hints');$('reveal').onclick=()=>tool('reveals');
 $('restart').onclick=()=>{if(!game||busy)return;dialog('restart',{details:mode==="daily"?"Restart the same daily puzzle with three lives and a fresh clock. Your personal best stays saved. The current clock keeps running until you restart.":"Restart this puzzle with three lives. Your used tools stay spent. Restarting is always free.",restart:mode==="daily"?"Restart daily":"Restart level"});$('confirm-restart').onclick=()=>{close();if(game.completed){newLevel();}else newLevel(true);};$('keep-playing').onclick=close;};

@@ -5,18 +5,19 @@ import {JSDOM} from 'jsdom';
 import {createGame} from '../web/engine.js';
 import {validateJourneyCompletion} from '../aws-leaderboard/src/journey.mjs';
 
-test('journey tools, restart, completion, and the hearts leaderboard preserve scoring history',async()=>{
+test('journey tools, restart, completion, and the hearts leaderboard preserve scoring history',async context=>{
   const dom=new JSDOM(await readFile(new URL('../web/index.html',import.meta.url),'utf8'),{url:'http://localhost:4173/'}),{window}=dom;
   window.localStorage.setItem('firefly-grove-v1',JSON.stringify({version:1,level:1,completed:0,installSeed:42,hints:3,reveals:10,game:createGame(1,42),settings:{autoCross:false,haptics:false}}));
   window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  const values={window,document:window.document,location:window.location,localStorage:window.localStorage,navigator:window.navigator,matchMedia:()=>({matches:true,addEventListener(){}}),ResizeObserver:class{observe(){}},setInterval:()=>0};
+  const values={window,document:window.document,location:window.location,localStorage:window.localStorage,navigator:window.navigator,matchMedia:()=>({matches:true,addEventListener(){}}),ResizeObserver:class{observe(){}disconnect(){}},setInterval:()=>0};
   const previous=Object.fromEntries(Object.keys(values).map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
   try{
     for(const [key,value] of Object.entries(values))Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
     await import('../web/app.js');const $=id=>window.document.getElementById(id),saved=()=>JSON.parse(window.localStorage.getItem('firefly-grove-v1'));
-    $('play').click();$('reveal').click();assert.equal(saved().game.heartFinds.length,1);
+    $('play').click();$('reveal').click();assert.equal(saved().game.heartFinds.length,1);$('hint-continue').click();
     $('restart').click();$('confirm-restart').click();assert.equal(saved().game.heartFinds.length,0);
-    $('reveal').click();$('reveal').click();await new Promise(resolve=>setTimeout(resolve,5));
+    $('reveal').click();$('hint-continue').click();context.mock.timers.enable({apis:['setTimeout']});$('reveal').click();context.mock.timers.tick(2000);
+    assert.ok($('hint-continue'),'final reveal remains visible until acknowledged');$('hint-continue').click();context.mock.timers.reset();await new Promise(resolve=>setTimeout(resolve,5));
     const state=saved(),[entry]=state.journeyHearts.pending;
     assert.equal(state.completed,1);assert.equal(entry.hearts,3);assert.equal(entry.body.finds.length,2);
     assert.equal(validateJourneyCompletion(entry.body).hearts,3);
