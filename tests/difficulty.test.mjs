@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {generatePuzzle,generateClassicPuzzle,gradePuzzle,difficultyRequirements,createGame,isTarget,applyMove} from '../web/engine.js';
+import {generatePuzzle,generateClassicPuzzle,generateGradedPuzzle,gradePuzzle,difficultyRequirements,createGame,isTarget,applyMove,findHint} from '../web/engine.js';
 import {createDailyGame} from '../web/daily.js';
 import {initializeHeartFinds,heartsManager} from '../web/hearts.js';
 import {validateJourneyCompletion} from '../aws-leaderboard/src/journey.mjs';
@@ -29,11 +29,21 @@ test('post-training puzzles resist the singles chain and meet their measured rea
     assert.ok(grade.openingChain<=requirements.openingChain,label);
     assert.ok(grade.longestChain<=requirements.longestChain,label);
     assert.ok(colorSingles(puzzle)<=Math.max(2,singletons),label);
+    if(difficulty>0){
+      assert.equal(singletons,0,label);assert.equal(grade.openingChain,0,label);assert.equal(colorSingles(puzzle),0,label);
+      const hint=findHint({...puzzle,marks:Array(n*n).fill(0)});assert.ok(hint,label);assert.equal(hint.target,false,label);assert.notEqual(hint.kind,'last-in-color',label);
+      for(const cell of hint.cells)assert.equal(isTarget(puzzle,cell),false,label);
+    }
   }
   const classic=generateClassicPuzzle(10,42,2),grade=gradePuzzle(classic);
   assert.equal(grade.advancedSteps,0);assert.equal(grade.openingChain,10);assert.equal(colorSingles(classic),10);
-  assert.equal(createGame(6,42).generation,'journey-v1');assert.equal(createGame(7,42).generation,'journey-v2');
+  assert.equal(createGame(6,42).generation,'journey-v1');assert.equal(createGame(7,42).generation,'journey-v3');
+  for(const level of [8,9,11,12,14,15,23,24,33]){
+    const game=createGame(level,42);assert.deepEqual(game.givens,[]);assert.ok(game.marks.every(mark=>mark===0));assert.equal(game.grade.openingChain,0);
+  }
+  assert.throws(()=>createGame(7,42,'future'),RangeError);
   assert.throws(()=>generatePuzzle(6.5,1),RangeError);
+  assert.throws(()=>generateClassicPuzzle(6,1,0,0),RangeError);
   assert.deepEqual(difficultyRequirements(6,-1),difficultyRequirements(6,0));
   assert.deepEqual(difficultyRequirements(10,10),difficultyRequirements(10,2));
   assert.deepEqual(gradePuzzle({size:2,regions:[0,0,0,0],solution:[0,1]}),{solved:false});
@@ -52,6 +62,17 @@ test('legacy replay and daily layouts remain byte-for-byte compatible with relea
     const finds=game.solution.flatMap((c,r)=>game.givens.includes(r*game.size+c)?[]:[r*game.size+c]);
     assert.equal(validateJourneyCompletion({version:'journey-v1',level,seed:42,finds}).hearts,3);
   }
+  for(const [level,expected] of [
+    [7,'7d141e344a01e1316f44c77ce799760a679d44d82aeb572d9c9974be97d7e0a6'],
+    [8,'bf2e7a5e74aaf7b86a192ca3cfea218d3383da14ce3d5bbf8446ad9e51133835'],
+    [9,'2f6ac21535c9b6509869b7d7dc255d70c0f694fe4fc8b8d32853ee385aa72662'],
+    [13,'a2707da8194fdb1201132fff28d0dca90316e3cc646d008597152bac353d32f5'],
+    [33,'bac6fefa16b35e1cf672f734547ad15d034482c2679126288c90ceb21bd3fd67']
+  ]){
+    const game=createGame(level,42,'journey-v2');assert.equal(digest([game.regions,game.solution,game.givens]),expected);
+    const finds=game.solution.map((c,r)=>r*game.size+c);assert.equal(validateJourneyCompletion({version:'journey-v2',level,seed:42,finds}).hearts,3);
+    assert.ok(generateGradedPuzzle(game.size,42,game.difficulty).grade.openingChain>=1);
+  }
   const daily=createDailyGame('2026-10-28');
   assert.equal(digest([daily.regions,daily.solution]),'65f945e6378c5ef5a07036593defbe70beaef1118f769f9c1d2529b96a18ad66');
 });
@@ -68,7 +89,7 @@ test('new-generation hearts replay on the server and survive a staggered deploym
     if(legacyServer)throw Object.assign(Error('Invalid journey puzzle.'),{status:400});
     return {credited:true,hearts:validateJourneyCompletion(body).hearts,mine:{rank:1,hearts:2},total:1};
   }});
-  const entry=manager.queue(game);assert.equal(entry.body.version,'journey-v2');
+  const entry=manager.queue(game);assert.equal(entry.body.version,'journey-v3');
   assert.equal(validateJourneyCompletion(entry.body).hearts,2);
   await manager.flush();assert.equal(entry.status,'pending');assert.equal(manager.pending().length,1);assert.match(entry.error,/updated server/);
   legacyServer=false;await manager.flush();assert.equal(entry.status,'synced');assert.equal(manager.pending().length,0);

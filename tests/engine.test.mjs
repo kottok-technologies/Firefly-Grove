@@ -14,22 +14,22 @@ test('generated boards are connected, deterministic, and uniquely solvable at ev
     }
   }
 });
-test('region sizes stay balanced, with 1–3 singletons and an average close to one', () => {
-  let singletons = 0, oneSingleton = 0;
+test('region sizes stay balanced, with singleton-free harder profiles and gentle singleton variety', () => {
+  let singletons = 0, oneSingleton = 0, gentleSamples=0;
   const samples = 140;
   for(let seed=0;seed<samples;seed++){
-    const n=4+seed%7, puzzle=generatePuzzle(n,seed,seed%3), sizes=Array(n).fill(0);
+    const n=4+seed%7, difficulty=seed%3,puzzle=generatePuzzle(n,seed,difficulty), sizes=Array(n).fill(0);
     puzzle.regions.forEach(region=>sizes[region]++);
     const count=sizes.filter(size=>size===1).length;
-    assert.ok(count>=1&&count<=3,`${n}×${n}, seed ${seed}: ${count} singletons`);
+    if(n>=6&&difficulty>0)assert.equal(count,0,`${n}×${n}, seed ${seed}: harder boards have no singletons`);
+    else {assert.ok(count>=1&&count<=3,`${n}×${n}, seed ${seed}: ${count} singletons`);gentleSamples++;singletons+=count;if(count===1)oneSingleton++;}
     assert.ok(Math.max(...sizes)<=Math.ceil(n*n/(n-count)*1.8),`Dominant region at seed ${seed}`);
     const check=solve(puzzle.regions,n);
     assert.equal(check.exhausted,false);
     assert.deepEqual(check.solutions,[puzzle.solution]);
-    singletons+=count;if(count===1)oneSingleton++;
   }
-  assert.ok(singletons/samples>=1&&singletons/samples<=1.3,`Mean singleton count: ${singletons/samples}`);
-  assert.ok(oneSingleton/samples>=.8,`One-singleton proportion: ${oneSingleton/samples}`);
+  assert.ok(singletons/gentleSamples>=1&&singletons/gentleSamples<=1.3,`Gentle mean singleton count: ${singletons/gentleSamples}`);
+  assert.ok(oneSingleton/gentleSamples>=.8,`Gentle one-singleton proportion: ${oneSingleton/gentleSamples}`);
 });
 test('incorrect firefly placements cost lives, completion and lockout work', () => {
   const g = createGame(1, 42), empty = g.marks.findIndex((v,i) => !v && !isTarget(g,i));

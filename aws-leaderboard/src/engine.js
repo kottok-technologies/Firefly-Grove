@@ -41,6 +41,7 @@ export function levelConfig(level) {
 }
 export function generateClassicPuzzle(n, seed, difficulty = 0, requestedSingletons) {
   if(!Number.isInteger(n)||n<4||n>10)throw new RangeError('Puzzle size must be between 4 and 10.');
+  if(requestedSingletons!==undefined&&![1,2,3].includes(requestedSingletons))throw new RangeError('Classic generation needs 1–3 singleton regions.');
   const rng = random(seed);
   // Choose the count once, before retries, so easier-to-generate layouts do not
   // bias the output toward extra singletons. Expected count: 1.17.
@@ -149,7 +150,7 @@ function staysConnected(regions,n,removed) {
   while(stack.length)for(const cell of neighbors(stack.pop(),n))if(cell!==removed&&regions[cell]===color&&!seen.has(cell)){seen.add(cell);stack.push(cell);}
   return seen.size===cells.length;
 }
-export function generatePuzzle(n,seed,difficulty=0) {
+export function generateGradedPuzzle(n,seed,difficulty=0) {
   if(n<6)return generateClassicPuzzle(n,seed,difficulty);
   if(!Number.isInteger(n)||n>10)throw new RangeError('Puzzle size must be between 4 and 10.');
   const rng=random(seed^0x7f4a7c15),roll=random(seed)();
@@ -185,9 +186,45 @@ export function generatePuzzle(n,seed,difficulty=0) {
   // Do not silently hand the player another trivial puzzle on a hard seed.
   throw new Error('Unable to generate a puzzle at the required difficulty.');
 }
-export function createGame(level, seed, generation = level<=6?'journey-v1':'journey-v2') {
+export function generatePuzzle(n,seed,difficulty=0) {
+  // Training and Gentle boards retain approachable, single-color openings.
+  // Keep the v2 generator unchanged so old saves still replay exactly.
+  if(n<6||difficulty<1)return generateGradedPuzzle(n,seed,difficulty);
+  if(!Number.isInteger(n)||n>10)throw new RangeError('Puzzle size must be between 4 and 10.');
+  const rng=random(seed^0x51c3a7b9),cap=Math.ceil(n*1.8);
+  const requirements={...difficultyRequirements(n,difficulty,0),openingChain:0};
+  for(let restart=0;restart<24;restart++){
+    const puzzle=generateGradedPuzzle(n,(seed+Math.imul(restart,7919))>>>0,difficulty);
+    const targets=new Set(puzzle.solution.map((c,r)=>r*n+c)),sizes=Array(n).fill(0);
+    puzzle.regions.forEach(color=>sizes[color]++);
+    // Grow every formerly frozen singleton by borrowing connected boundary
+    // cells. No color loses its target or shrinks below two cells.
+    for(let attempt=0;attempt<400;attempt++){
+      const options=[];
+      for(let cell=0;cell<n*n;cell++)if(!targets.has(cell)&&sizes[puzzle.regions[cell]]>2){
+        for(const color of new Set(neighbors(cell,n).map(i=>puzzle.regions[i]))){
+          if(color!==puzzle.regions[cell]&&sizes[color]<cap)options.push([cell,color]);
+        }
+      }
+      if(!options.length)break;
+      const starters=options.filter(([,color])=>sizes[color]===1),pool=starters.length&&rng()<.35?starters:options;
+      const [cell,color]=pool[Math.floor(rng()*pool.length)],previous=puzzle.regions[cell];
+      if(!staysConnected(puzzle.regions,n,cell))continue;
+      puzzle.regions[cell]=color;
+      const check=solve(puzzle.regions,n,{budget:20000});
+      if(check.exhausted||check.solutions.length!==1){puzzle.regions[cell]=previous;continue;}
+      sizes[previous]--;sizes[color]++;
+      if(sizes.some(size=>size<2||size>cap))continue;
+      const grade=gradePuzzle(puzzle);
+      if(matchesDifficulty(grade,requirements))return {...puzzle,seed,effort:check.nodes,grade};
+    }
+  }
+  throw new Error('Unable to generate a puzzle with a deduction-led opening.');
+}
+export function createGame(level, seed, generation = level<=6?'journey-v1':'journey-v3') {
   const config = levelConfig(level), difficulty = (level - 7) % 3;
-  const puzzle = generation==='journey-v1'?generateClassicPuzzle(config.size,seed,difficulty):generatePuzzle(config.size,seed,difficulty);
+  if(!['journey-v1','journey-v2','journey-v3'].includes(generation))throw new RangeError('Unsupported journey generation.');
+  const puzzle = generation==='journey-v1'?generateClassicPuzzle(config.size,seed,difficulty):generation==='journey-v2'?generateGradedPuzzle(config.size,seed,difficulty):generatePuzzle(config.size,seed,difficulty);
   const marks = Array(config.size ** 2).fill(0), rng = random(seed ^ 0xabc123);
   const givenRows = shuffle(Array.from({ length: config.size }, (_, i) => i), rng).slice(0, config.givens);
   const givens = givenRows.map(r => r * config.size + puzzle.solution[r]); givens.forEach(i => marks[i] = 2);

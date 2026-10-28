@@ -22,7 +22,7 @@ function validateGame(game,daily=false){
   if(game.heartFinds!==undefined&&(!Array.isArray(game.heartFinds)||game.heartFinds.length>512||game.heartFinds.some(i=>!integer(i,-1,count-1))))invalid();
   if(daily){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(game.dailyDay)||!(game.startedAt===null||Number.isFinite(game.startedAt))||!Number.isFinite(game.elapsedMs)||game.elapsedMs<0)invalid();
-  }else if(!integer(game.level,1,1000000)||!integer(game.seed,0,0xffffffff)||game.generation!==undefined&&!['journey-v1','journey-v2'].includes(game.generation))invalid();
+  }else if(!integer(game.level,1,1000000)||!integer(game.seed,0,0xffffffff)||game.generation!==undefined&&!['journey-v1','journey-v2','journey-v3'].includes(game.generation))invalid();
 }
 function validateState(state){
   if(!plain(state)||state.version!==1||!integer(state.installSeed,0,0xffffffff)||!integer(state.level,1,1000000)||!integer(state.completed,0,1000000))invalid();
@@ -44,7 +44,7 @@ function validateState(state){
     for(const level of Object.values(ledger.lastLevel))if(!integer(level,0,1000000))invalid();
     for(const entry of ledger.pending){
       const body=entry?.body;
-      if(!plain(entry)||typeof entry.owner!=='string'||!plain(body)||!['journey-v1','journey-v2'].includes(body.version)||!integer(body.level,1,1000000)||!integer(body.seed,0,0xffffffff)||!/^\d{4}-\d{2}-\d{2}$/.test(body.day)||!Array.isArray(body.finds)||body.finds.length>512||body.finds.some(i=>!integer(i,-1,99)))invalid();
+      if(!plain(entry)||typeof entry.owner!=='string'||!plain(body)||!['journey-v1','journey-v2','journey-v3'].includes(body.version)||!integer(body.level,1,1000000)||!integer(body.seed,0,0xffffffff)||!/^\d{4}-\d{2}-\d{2}$/.test(body.day)||!Array.isArray(body.finds)||body.finds.length>512||body.finds.some(i=>!integer(i,-1,99)))invalid();
     }
   }
   return state;

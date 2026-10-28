@@ -47,7 +47,7 @@ export function heartsManager({state,origin,profile,ensureOnline,api,persist,now
           entry.error=error.message;
           // Retain the replay during a staggered app/server rollout. An older
           // server reports an unknown puzzle version as this specific 400.
-          if(entry.body.version==='journey-v2'&&error.status===400&&error.message==='Invalid journey puzzle.'){
+          if(['journey-v2','journey-v3'].includes(entry.body.version)&&error.status===400&&error.message==='Invalid journey puzzle.'){
             entry.error='Heart rankings need the updated server. Your completion is saved for retry.';
             persist();break;
           }
