@@ -25,21 +25,32 @@ test('journey tools, restart, completion, and the hearts leaderboard preserve sc
     $('journey-hearts-board').click();await new Promise(resolve=>setTimeout(resolve,0));
     assert.ok($('hearts-day'));assert.match($('hearts-status').textContent,/not configured/);
     assert.match($('modal-content').textContent,/Each level counts once/);
-    assert.equal($('landing-screen').hidden,false,'rankings opened after completion leave home underneath');
-    assert.equal($('puzzle-screen').hidden,true);
+    assert.equal($('landing-screen').hidden,true,'rankings keep the completed board underneath');
+    assert.equal($('puzzle-screen').hidden,false);
+    assert.equal($('board-complete').hidden,false);
+    assert.equal($('board').inert,true);
+    assert.ok($('board-wrap').classList.contains('is-complete'));
+    assert.equal($('hint').disabled,true);assert.equal($('reveal').disabled,true);
     $('hearts-refresh').click();await new Promise(resolve=>setTimeout(resolve,0));
     $('hearts-day').dispatchEvent(new window.Event('change'));await new Promise(resolve=>setTimeout(resolve,0));
     $('close-modal').click();
-    assert.equal($('modal').open,false);assert.equal($('landing-screen').hidden,false);
+    assert.equal($('modal').open,false);assert.equal($('puzzle-screen').hidden,false);
+    assert.equal($('board-complete').hidden,false);
+    assert.match($('board-next-level').textContent,/Next level/);
     assert.match($('play').textContent,/Play level 2/);
     assert.match($('hearts-home-status').textContent,/1 completed level/);
     assert.equal(saved().completed,1);assert.equal(saved().journeyHearts.pending.length,1);
     $('hearts-leaderboard').click();await new Promise(resolve=>setTimeout(resolve,0));
     $('modal').open=false;$('modal').dispatchEvent(new window.Event('close'));
-    assert.equal($('landing-screen').hidden,false,'native dismissal also returns to home');
-    await $('play').onclick();
+    assert.equal($('puzzle-screen').hidden,false,'native dismissal keeps the direct next-level action');
+    const next=$('board-next-level').onclick();
+    await $('board-next-level').onclick();
+    await next;
     assert.equal($('puzzle-screen').hidden,false);assert.equal(saved().game.level,2);
     assert.equal(saved().game.completed,false);assert.equal(saved().completed,1);
+    assert.equal($('board-complete').hidden,true);assert.equal($('board').inert,false);
+    assert.equal($('board-wrap').classList.contains('is-complete'),false);
+    assert.equal(saved().journeyHearts.pending.length,1,'continuing does not award the level twice');
   }finally{
     for(const [key,descriptor] of Object.entries(previous)){
       if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];

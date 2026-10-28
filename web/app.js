@@ -48,7 +48,7 @@ function finishCellMotion(){
 }
 function scheduleIdle(){
   clearTimeout(idleTimer);
-  if(!isPlaying||nativePaused||document.hidden||reducedMotion.matches||$('modal').open)return;
+  if(!isPlaying||game?.completed||nativePaused||document.hidden||reducedMotion.matches||$('modal').open)return;
   idleTimer=setTimeout(()=>{
     const sprites=[...$('board').querySelectorAll('.target:not(.just-found) .firefly-sprite:not([data-firefly-motion])')];
     if(sprites.length){
@@ -163,6 +163,7 @@ $('daily-play').onclick=()=>{
 $('daily-previous').onclick=()=>{if(state.dailyRun)enterDaily(state.dailyRun.dailyDay);};
 async function newDailyRun(day,ranked=!!game?.online){
   cancelTap();cancelDrag();busy=true;game=null;renderedGame=null;
+  $('board-complete').hidden=true;$('board-wrap').classList.remove('is-complete');
   $('board').replaceChildren();$('loading').hidden=false;
   $('level-prefix').textContent='Daily';$('level').textContent='';$('chapter').textContent='DAILY SPEED CHALLENGE';
   try{
@@ -181,6 +182,10 @@ async function newDailyRun(day,ranked=!!game?.online){
   if(isPlaying)beginDailyRun(game);
   finishLoad();message('The clock is running. Find all eight fireflies—no tools, just your logic.');
 }
+$('board-next-level').onclick=async()=>{
+  if(!isPlaying||busy||modal.open||!game?.completed)return;
+  await newLevel();
+};
 $('care-package').onclick=()=>dialog('carePackage',{progress:`You have completed ${state.completed} levels. ${CARE_PACKAGE_LEVELS-state.completed%CARE_PACKAGE_LEVELS} more to your next package.`});
 new ResizeObserver(([entry])=>{
   const side=Math.floor(Math.min(entry.contentRect.width,entry.contentRect.height));
@@ -194,7 +199,13 @@ function render(){
   $('difficulty').textContent=daily?(game.online?'Ranked':'Practice'):levelConfig(game.level).label;
   $('chapter').textContent=daily?`${game.dailyDay} · UTC`:game.level<=6?'THE FIRST GLOW':'INTO THE GROVE';
   $('journey-tools').hidden=daily;$('daily-rules').hidden=!daily;
-  $('hint').disabled=$('reveal').disabled=daily||busy;
+  $('hint').disabled=$('reveal').disabled=daily||busy||game.completed;
+  $('board-complete').hidden=!game.completed||busy;
+  $('board-wrap').classList.toggle('is-complete',game.completed&&!busy);
+  $('board').inert=game.completed;
+  $('board-complete-title').textContent=daily?'Daily complete':'Level complete';
+  $('board-next-level').textContent=daily?'Play again →':'Next level →';
+  $('board-next-level').disabled=busy;
   $('time').classList.toggle('speed-time',daily);
   $('daily-run-best').textContent=state.dailyRecords[game.dailyDay]?.bestMs!=null?`Best ${formatSpeed(state.dailyRecords[game.dailyDay].bestMs)}`:'Your first time awaits';
   $('size').textContent=`${game.size} × ${game.size}`;$('total').textContent=game.size;
@@ -235,7 +246,7 @@ function playFound(cell){
 function updateTime(){if(game)$('time').textContent=mode==='daily'?formatSpeed(dailyElapsed(game)):`${String(Math.floor(game.elapsed/60)).padStart(2,'0')}:${String(game.elapsed%60).padStart(2,'0')}`;}
 async function newLevel(restart=false){
   if(mode==='daily')return newDailyRun(game?.dailyDay||dailyKey());
-  cancelTap();cancelDrag();busy=true;$('loading').hidden=false;$('hint').disabled=$('reveal').disabled=true;
+  cancelTap();cancelDrag();busy=true;$('board-complete').hidden=true;$('board-wrap').classList.remove('is-complete');$('loading').hidden=false;$('hint').disabled=$('reveal').disabled=true;
   if(restart){game={...game,marks:Array(game.size**2).fill(0),lives:3,mistakes:0,elapsed:0,completed:false,heartFinds:[],heartCompletion:null};game.givens.forEach(i=>game.marks[i]=2);finishLoad();return;}
   let seed=(state.installSeed+Math.imul(state.level,2654435761))>>>0;
   try{
@@ -331,7 +342,7 @@ function win(){
   save();render();void cloud?.flush();
   // Let the last firefly finish arriving before covering the board.
   const showCompletion=()=>{
-    if(!isPlaying||game!==completedGame)return;
+    if(!isPlaying||busy||game!==completedGame)return;
     dialog('journeyWin',{details:`Every firefly found its home. Level ${game.level} complete in ${$("time").textContent}, with ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}.`,next:`Wander to level ${state.level} →`});
     $('win-reward').hidden=!reward;updateJourneyHeartStatus(completedGame);
     $('journey-hearts-board').onclick=()=>showHeartsLeaderboard(completedGame.heartCompletion?.body.day);
@@ -344,7 +355,7 @@ function winDaily(){
   save();render();const completedGame=game;
   if(completedGame.online)submitRace(completedGame);
   setTimeout(()=>{
-    if(!isPlaying||game!==completedGame)return;
+    if(!isPlaying||busy||game!==completedGame)return;
     dialog('dailyWin',{title:result.improved?"A new personal best!":"Daily complete.",time:formatSpeed(game.elapsedMs),details:`${game.dailyDay} · ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}`,best:formatSpeed(result.bestMs)});
     $('daily-again').onclick=()=>{close();newDailyRun(completedGame.dailyDay);};
     $('daily-home').onclick=showHome;
@@ -502,9 +513,7 @@ function updateJourneyHeartStatus(run){
 }
 $('hearts-leaderboard').onclick=()=>showHeartsLeaderboard();
 async function showHeartsLeaderboard(day=dailyKey()){
-  // The leaderboard replaces the completion dialog. Leave a playable home
-  // screen behind it so every dismissal path avoids the finished puzzle.
-  if(isPlaying&&game?.completed)showHome();
+  // The completed board keeps its Next level button behind the rankings.
   dialog('heartsLeaderboard');
   $('hearts-day').value=day;$('hearts-day').max=dailyKey();$('hearts-day').min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
   $('hearts-day').onchange=()=>showHeartsLeaderboard($('hearts-day').value);$('hearts-refresh').onclick=()=>showHeartsLeaderboard(day);

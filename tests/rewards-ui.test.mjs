@@ -27,6 +27,13 @@ test('care packages skip completion five, award at ten, and keep existing invent
       assert.equal($('win-reward').hidden,!reward);
       assert.equal($('progress').style.width,reward?'0%':'50%');
       assert.match($('milestone-text').textContent,reward?/^10 more levels/:/^5 more levels/);
+      $('close-modal').click();
+      assert.equal($('board-complete').hidden,false,'closing the result leaves a next-level overlay');
+      assert.ok($('board-wrap').classList.contains('is-complete'));
+      await $('board-next-level').onclick();
+      assert.equal(saved().game.level,completed+2);assert.equal(saved().completed,completed+1);
+      assert.equal(saved().hints,reward?5:3);assert.equal(saved().reveals,reward?3:2);
+      assert.equal($('board-complete').hidden,true);
     }finally{
       for(const [key,descriptor] of Object.entries(previous)){
         if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];
