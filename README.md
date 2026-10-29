@@ -9,6 +9,12 @@ Pushes and pull requests run lint, tests, enforced coverage, dependency/security
 
 A calm, original firefly-themed region puzzle for Android, with a mobile-only browser preview. Guest play, no forced advertising, and optional Google Play cloud saves.
 
+## Development versioning
+
+The public development version is **0.1.0**. Routine changes keep this version; version bumps and signed APK/AAB builds happen only for requested test builds or agreed release milestones. Android's internal `versionCode` stays at **27** after the public-version reset and must increase for the next Play upload. Previously generated artifacts keep their original version labels. Generator/save protocol versions are independent and remain unchanged.
+
+Push CI keeps its normal development builds and quality/security checks. Signed artifacts are opt-in: run **Signed Android release**, or manually run **CI** with **Build signed APK/AAB artifacts after checks pass** selected. An explicitly approved Terraform application deployment also retains its connected-artifact build.
+
 ## Play locally
 
 Requires Node.js 24.12 or newer within Node 24. Playing locally needs no npm installation; CI lint and coverage tools require `npm ci`.
@@ -48,7 +54,7 @@ Daily browser checks used an isolated in-memory save: they covered no automatic 
 
 Each installation has a random seed; each successive level derives a distinct seed from it. Completed/generated layouts are recorded locally and duplicate layouts are rejected. Targets are a row/column permutation with non-touching diagonals. Connected regions first grow from those targets. Training and legacy layouts use an ordered deduction chain. Post-training journey layouts then change connected boundaries while preserving the unique solution, and are accepted only after a logical grader verifies that basic single-candidate chains stall and explained deductions complete the puzzle. A constrained solver independently verifies uniqueness.
 
-Training and Gentle puzzles have 1–3 single-cell regions, selected before retries: 85% one, 13% two, and 2% three (expected mean 1.17). From 1.9.1, Thoughtful and Challenging journey boards have zero single-cell regions, no starter fireflies, and no direct row/column/color single before a deduction. Every color has at least two cells. Region size stays capped at 1.8 times the average size of non-singleton regions, rounded up; for singleton-free boards this is ceil(1.8 × grid size). Saved v1/v2 puzzles and daily races retain their original layouts.
+Training and Gentle puzzles have 1–3 single-cell regions, selected before retries: 85% one, 13% two, and 2% three (expected mean 1.17). Thoughtful and Challenging journey boards have zero single-cell regions, no starter fireflies, and no direct row/column/color single before a deduction. Every color has at least two cells. Region size stays capped at 1.8 times the average size of non-singleton regions, rounded up; for singleton-free boards this is ceil(1.8 × grid size). Saved v1/v2 puzzles and daily races retain their original layouts.
 
 Generation uses a module worker so larger boards do not freeze the screen. Generation times vary. The same level restarts with the same puzzle. When a saved active board has a size that no longer matches the revised progression, it is retained in `previousPuzzle` in local storage and a board of the new size is created on Play. The level, tool balances, and milestone progress are preserved. Different installations get different progressions; global uniqueness across devices is not guaranteed.
 
@@ -58,7 +64,7 @@ Open `android/` in Android Studio. Use JDK 17 or later and Android SDK platform 
 
 From the `android/` directory, run `./gradlew assembleDebug` (Windows: `gradlew.bat assembleDebug`). The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. This is a debug-signed build for sideloading and testing; distribution builds use the persistent release configuration documented below. Android 13+ Back uses the platform's OnBackInvokedCallback, while older devices retain the legacy callback. See the [Android back-navigation guide](https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture) and [AGP 8.13 compatibility](https://developer.android.com/build/releases/agp-8-13-0-release-notes).
 
-The SDK 36 debug build was compiled successfully, Android lint completed with zero errors (six non-blocking warnings), and APK signature verification passed. Security release 1.4.1 removes unsafe dialog interpolation and the unused native bridge, validates worker messages, and restricts WebView content. Current CI produces development builds, signed main-branch distribution artifacts, and test/security reports; see [the security review](docs/SECURITY_REVIEW.md) for scope and validation. The initial APK was emulator-tested by the user; subsequent updates have been browser-tested and still need emulator/device verification. Live reward ads remain unconfigured.
+The SDK 36 debug build was compiled successfully, Android lint completed with zero errors (six non-blocking warnings), and APK signature verification passed. Security release 1.4.1 removes unsafe dialog interpolation and the unused native bridge, validates worker messages, and restricts WebView content. Current CI produces development builds, manually requested signed distribution artifacts, and test/security reports; see [the security review](docs/SECURITY_REVIEW.md) for scope and validation. The initial APK was emulator-tested by the user; subsequent updates have been browser-tested and still need emulator/device verification. Live reward ads remain unconfigured.
 
 ## Optional reward ads — integration still required
 
@@ -89,7 +95,7 @@ Deployment status: AWS is the production backend and its Terraform bootstrap is 
 
 ## Persistent Android release signing
 
-Local and CI distribution builds share a persistent signing key. Successful main-branch CI produces a connected release APK and a Play upload bundle; pull requests only produce development builds. See [Android signing](docs/ANDROID_SIGNING.md) for local builds, key backup, certificates, and migration from debug APKs.
+Local and CI distribution builds share a persistent signing key. Manually requested release builds produce a connected release APK and a Play upload bundle; pull requests only produce development builds. See [Android signing](docs/ANDROID_SIGNING.md) for local builds, key backup, certificates, and migration from debug APKs.
 
 ## Daily hearts leaderboard
 
@@ -105,6 +111,6 @@ The board and hint previews use a transparent PNG firefly with dark beetle wing 
 
 ## Google Play cloud saves
 
-Version 1.9.0 adds optional Play Games Saved Games in Settings. Guest play remains available; automatic Play Games profile-creation prompts are suppressed. Explicit linking backs up the journey, tools, settings, daily bests, notes, and the current production player profile. Restoring keeps the same online player ID. Independent device/cloud changes require choosing one complete save, with no inventory or hearts merging. A local recovery copy is retained before replacement. Cloud upload can finish later while offline.
+Settings offers optional Play Games Saved Games. Guest play remains available; automatic Play Games profile-creation prompts are suppressed. Explicit linking backs up the journey, tools, settings, daily bests, notes, and the current production player profile. Restoring keeps the same online player ID. Independent device/cloud changes require choosing one complete save, with no inventory or hearts merging. A local recovery copy is retained before replacement. Cloud upload can finish later while offline.
 
 The integration is disabled until the public Game Services project ID is configured and Saved Games and Android credentials are enabled in Play Console. See [setup, privacy, testing, and recovery](docs/GOOGLE_PLAY_CLOUD.md). No AWS schema or backend deployment is needed for this integration.

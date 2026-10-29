@@ -29,7 +29,7 @@ Release builds fail when signing credentials are unavailable. Normal `assembleDe
 
 The repository stores `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` as Actions secrets. Public variables `ANDROID_CERT_SHA256` and `LEADERBOARD_API_URL` pin the certificate and deployed API.
 
-Successful CI on a push to main builds signed APK/AAB artifacts after the quality gate passes. **Signed Android release** can also be dispatched manually on main, without changing AWS resources. The Terraform deployment workflow builds the same signed artifacts after a successful application apply. Download `firefly-grove-connected-apk` from the relevant workflow.
+Push CI does not generate signed releases. Manually run **CI** on main with **Build signed APK/AAB artifacts after checks pass** selected to build them after the quality gate. **Signed Android release** can also be dispatched manually on main, without changing AWS resources. The Terraform deployment workflow builds the same signed artifacts after a successful application apply. Download `firefly-grove-connected-apk` from the relevant workflow.
 
 Pull-request builds receive no signing secrets. Release jobs only run on main; runner key files are removed even after a failed build. Never commit the private signing folder or include it in artifacts. The base64 secret is sensitive key material, not encryption.
 

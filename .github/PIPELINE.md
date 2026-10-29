@@ -16,7 +16,7 @@ Every push and pull request runs `.github/workflows/ci.yml` and `codeql.yml`. Bo
 
 CodeQL reports alerts through the repository Security tab; a successful analysis job means analysis completed, not that no alerts exist. `CI required checks` fails if any applicable CI job fails or is cancelled. To enforce merges, configure that status plus both CodeQL language checks as required branch/ruleset checks. This change does not change repository branch protection.
 
-Artifacts remain downloadable from Actions for 14 days. Pull-request Android artifacts are development debug builds. After the required checks pass on main, a separate job builds connected release APKs and Play upload bundles with the persistent signing key. Local and CI release APKs share the certificate; earlier debug installs require a one-time migration. See [Android signing](../docs/ANDROID_SIGNING.md). Nothing is automatically published to Google Play.
+Artifacts remain downloadable from Actions for 14 days. Pull-request Android artifacts are development debug builds. Push CI does not create signed distribution builds. Manually run CI on main with `build_release` selected to build connected release APKs and Play upload bundles after the required checks pass, or run the separate Signed Android release workflow. Both use the persistent signing key. Local and CI release APKs share the certificate; earlier debug installs require a one-time migration. See [Android signing](../docs/ANDROID_SIGNING.md). Nothing is automatically published to Google Play.
 
 ## Coverage
 

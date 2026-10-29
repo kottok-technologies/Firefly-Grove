@@ -25,7 +25,8 @@ for(const file of await readdir(new URL('.github/workflows/',root))){
 }
 const ci=parseDocument(await read('.github/workflows/ci.yml')).toJS();
 assert.equal(ci.jobs.release.needs,'gate','Signed artifacts must wait for all quality checks');
-assert.equal(ci.jobs.release.if,"!cancelled() && needs.gate.result == 'success' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')",'Pull requests must never receive signing credentials');
+assert.equal(ci.jobs.release.if,"!cancelled() && needs.gate.result == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.build_release",'Signed artifacts require an explicit manual request on main');
+assert.equal(ci.on.workflow_dispatch.inputs.build_release.default,false,'Signed artifacts must be opt-in');
 assert.equal(ci.jobs.android.env,undefined,'Untrusted Android checks must not receive signing secrets');
 for(const file of ['android-release.yml','terraform-deploy.yml']){
   const job=parseDocument(await read('.github/workflows/'+file)).toJS().jobs.android;

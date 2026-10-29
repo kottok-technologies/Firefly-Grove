@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      build_release:
+        description: 'Build signed APK/AAB artifacts after checks pass'
+        type: boolean
+        default: false
   schedule:
     - cron: '23 8 * * 1'
 
@@ -245,8 +250,8 @@ jobs:
     name: Signed Android artifacts
     needs: gate
     if: "!cancelled() && needs.gate.result == 'success' && github.ref ==
-      'refs/heads/main' && (github.event_name == 'push' || github.event_name ==
-      'workflow_dispatch')"
+      'refs/heads/main' && github.event_name == 'workflow_dispatch' &&
+      inputs.build_release"
     permissions:
       contents: read
       actions: read

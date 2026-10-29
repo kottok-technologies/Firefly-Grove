@@ -1,4 +1,4 @@
-# Google Play cloud saves — 1.9.0
+# Google Play cloud saves
 
 Implementation is ready for configuration and end-to-end testing. It is not activated by an APK upload alone. The numeric Play Games Services project ID, Saved Games feature, Android credentials and tester access must be configured in Play Console. A build without the project ID supports guest play and shows cloud saving as unavailable.
 

@@ -1,6 +1,6 @@
 # Journey puzzle generation
 
-Version 1.9.1 removes single-cell colors from newly generated Thoughtful and Challenging journey boards. They have no starter fireflies and must require an explained deduction before the first placement. Gentle boards retain easier openings; training levels 1–6 retain their original layouts and givens. Existing saved puzzles keep their regions, notes, lives, solution and generation version. Restarting a saved puzzle keeps that puzzle.
+The generator excludes single-cell colors from newly generated Thoughtful and Challenging journey boards. They have no starter fireflies and must require an explained deduction before the first placement. Gentle boards retain easier openings; training levels 1–6 retain their original layouts and givens. Existing saved puzzles keep their regions, notes, lives, solution and generation version. Restarting a saved puzzle keeps that puzzle.
 
 ## Solving profiles
 
@@ -33,6 +33,6 @@ Automated tests check the opening deduction on empty boards, verify its exclusio
 
 Training games and old saves without a generation field use journey-v1. Earlier graded games use journey-v2. New post-training games use journey-v3. Heart submissions carry this version so the server regenerates the exact original puzzle and replays its find history. The updated server accepts all three versions; no database/schema change is needed. Cloud snapshot validation accepts all three generations too.
 
-Deploy the updated Lambda through the existing reviewed Terraform plan/apply workflow before distributing 1.9.1. During a staggered rollout the app retains an unsupported v2/v3 submission for retry. Existing UTC submission expiry still applies, so update the server first. Existing profiles, credited hearts, tools and levels are preserved.
+Deploy the updated Lambda through the existing reviewed Terraform plan/apply workflow before distributing builds that generate journey-v3 puzzles. During a staggered rollout the app retains an unsupported v2/v3 submission for retry. Existing UTC submission expiry still applies, so update the server first. Existing profiles, credited hearts, tools and levels are preserved.
 
 Daily speed races deliberately keep their classic speed-v1 layout for compatibility with current clients and active races. This change addresses journey levels. Google Play cloud activation remains dependent on its separate Console setup described in [Google Play cloud saves](GOOGLE_PLAY_CLOUD.md).
