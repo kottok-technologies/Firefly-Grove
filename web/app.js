@@ -37,6 +37,7 @@ let renderedGame=null, idleTimer=null;
 let mode='journey';
 if(game&&!game.completed)initializeHeartFinds(game);
 let drag=null,suppressDragClick=false;
+const mistakeTimers=new WeakMap();
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const motion=createMotion(document,reducedMotion);
 const fireflies=createFireflyPlayer();
@@ -260,6 +261,13 @@ async function newLevel(restart=false){
   finishLoad();
 }
 function finishLoad(){$('board-wrap').classList.remove('is-generating');if(mode==='journey')initializeHeartFinds(game);busy=false;$('home-note').hidden=true;$('loading').hidden=true;$('hint').disabled=$('reveal').disabled=false;tick=Date.now();render();motion.enter($('board-wrap'),'board');save();message(game.givens.length?`${game.givens.length===2?'Two fireflies have':'One firefly has'} already settled in. Let's find their friends.`:'A fresh patch of the grove. Take your time and follow the colors.');}
+function showMistake(cell){
+  clearTimeout(mistakeTimers.get(cell));
+  cell.classList.remove('error');
+  void cell.offsetWidth; // Restart the pulse for a repeated incorrect find.
+  cell.classList.add('error');
+  mistakeTimers.set(cell,setTimeout(()=>{cell.classList.remove('error');mistakeTimers.delete(cell);},650));
+}
 function vibrate(){if(state.settings.haptics)navigator.vibrate?.(50);}
 function autoCross(){if(mode==='daily'||!state.settings.autoCross)return;const n=game.size,targets=game.marks.flatMap((v,i)=>v===2?[i]:[]);game.marks.forEach((v,i)=>{if(!v&&!isTarget(game,i)&&targets.some(t=>Math.floor(t/n)===Math.floor(i/n)||t%n===i%n||game.regions[t]===game.regions[i]||(Math.abs(Math.floor(t/n)-Math.floor(i/n))<=1&&Math.abs(t%n-i%n)<=1)))game.marks[i]=1;});}
 function move(i,target){
@@ -272,7 +280,7 @@ function move(i,target){
   if(result==='mistake'){vibrate();message('No firefly here. One life lost.',true);}
   else {autoCross();if(target)message('A little light found. Every row, column, and color has just one.');}
   render();save();
-  if(result==='mistake')$('board').children[i].classList.add('error');
+  if(result==='mistake')showMistake($('board').children[i]);
   if(game?.lives===0)showLoss();else if(result==='won')win();
 }
 $('board').addEventListener('pointerdown',e=>{
