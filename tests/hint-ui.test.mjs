@@ -32,6 +32,19 @@ test('hints demand acknowledgement, spend once, and support Continue and Android
     const wrong=game.marks.findIndex((_,i)=>!isTarget(game,i));
     $('board').children[wrong].dispatchEvent(new window.MouseEvent('click',{bubbles:true,detail:0,shiftKey:true}));
     assert.equal(saved().game.lives,2);assert.ok($('game-status').classList.contains('show-toast'));assert.match($('game-status').textContent,/One life lost/);
+    const cell=$('board').children[wrong];
+    const animationEnd=name=>{const event=new window.Event('animationend',{bubbles:true});Object.defineProperty(event,'animationName',{value:name});cell.dispatchEvent(event);};
+    assert.ok(cell.classList.contains('error'));
+    animationEnd('mistake');assert.equal(cell.classList.contains('error'),false,'the finished shake must clean up its class');
+    cell.dispatchEvent(new window.MouseEvent('click',{bubbles:true,detail:0}));
+    assert.equal(cell.classList.contains('error'),false);assert.equal(saved().game.lives,2);
+    cell.dispatchEvent(new window.MouseEvent('click',{bubbles:true,detail:0,shiftKey:true}));
+    assert.ok(cell.classList.contains('error'));assert.equal(saved().game.lives,1);
+    cell.dispatchEvent(new window.MouseEvent('click',{bubbles:true,detail:0}));
+    assert.equal(cell.classList.contains('error'),false,'crossing during a shake also clears it, including with reduced motion');
+    animationEnd('cross-cell-confirm');assert.equal(cell.classList.contains('error'),false,'finishing a cross must not replay the mistake');
+    assert.equal(saved().game.lives,1);assert.equal(saved().game.mistakes,2);
+
   }finally{
     for(const [key,descriptor] of Object.entries(previous)){
       if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];

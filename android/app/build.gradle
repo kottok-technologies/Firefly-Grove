@@ -20,8 +20,8 @@ android {
         applicationId 'com.fireflygrove.game'
         minSdk 26
         targetSdk 36
-        versionCode 25
-        versionName '1.9.4'
+        versionCode 26
+        versionName '1.9.5'
         resValue 'string', 'game_services_project_id', playGamesProjectId
     }
     signingConfigs {

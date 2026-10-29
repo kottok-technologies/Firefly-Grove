@@ -229,7 +229,7 @@ function render(){
     if(previous===value)return;
     cell.dataset.mark=value;
     cell.classList.toggle('marked',value===1);cell.classList.toggle('target',value===2);
-    cell.classList.remove('just-found','just-crossed');
+    cell.classList.remove('just-found','just-crossed','error');
     cell.style.setProperty('--mark-delay',`${!fresh&&value===1?Math.min(crossIndex++*22,120):0}ms`);
     const row=Math.floor(i/game.size),col=i%game.size;
     cell.setAttribute('aria-label',`Row ${row+1}, column ${col+1}, color ${game.regions[i]+1}${value===1?', crossed out':value===2?', firefly':''}`);
@@ -325,6 +325,7 @@ $('board').addEventListener('dblclick',e=>e.preventDefault());
 $('board').addEventListener('animationend',e=>{
   const cell=e.target.closest('[data-cell]');if(!cell)return;
   if(e.animationName==='cross-cell-confirm')cell.classList.remove('just-crossed');
+  if(e.animationName==='mistake')cell.classList.remove('error');
 });
 $('board').addEventListener('contextmenu',e=>{
   const cell=e.target.closest('[data-cell]');if(!cell)return;
