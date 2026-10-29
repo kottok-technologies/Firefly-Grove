@@ -23,6 +23,10 @@ test('Settings edits the generated profile and racing no longer asks for a nickn
     const saved=JSON.parse(window.localStorage.getItem('firefly-grove-v1')).leaderboardProfile;
     assert.equal(saved.localId,initial.localId);assert.equal(saved.name,'Little Light');
     $('close-modal').click();$('settings').click();assert.equal($('race-name').value,'Little Light');
+    $('privacy-policy').click();assert.match($('modal-content').textContent,/Firefly Grove Privacy Policy/);
+    assert.match($('modal-content').textContent,/kottok.technologies@gmail.com/);assert.ok($('delete-data'));
+    $('privacy-back').click();assert.equal($('race-name').value,'Little Light');
+    assert.equal(JSON.parse(window.localStorage.getItem('firefly-grove-v1')).leaderboardProfile.localId,initial.localId);
     $('close-modal').click();$('daily-play').click();
     const race=[...$('modal-content').querySelectorAll('button')].find(button=>button.textContent==='Race online →');
     await race.onclick();

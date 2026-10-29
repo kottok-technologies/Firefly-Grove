@@ -83,3 +83,5 @@ dialog.hint-overlay{transform:none}
 /* A quiet amber signal keeps the region color and the cell in place. */
 .cell.error::after{content:'!';position:absolute;inset:21%;display:grid;place-items:center;border-radius:50%;background:#fff4d7;color:#76501a;border:1.5px solid #b78029;font-size:clamp(14px,4vw,22px);font-weight:800;line-height:1;pointer-events:none;box-shadow:0 1px 4px #5c421c30;animation:mistake-badge 650ms ease-out both}
 @keyframes mistake-badge{0%{opacity:0;transform:scale(.8)}20%,65%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.95)}}
+
+.privacy-reader h1{display:block;font:30px Georgia,serif;margin:12px 0}.privacy-reader h2{font:600 18px system-ui;margin:24px 0 10px}.privacy-reader .policy-kicker{font-size:10px;letter-spacing:1.5px}.privacy-reader a{color:#315b3f;overflow-wrap:anywhere;text-underline-offset:3px}.privacy-reader ul{padding-left:20px}

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile,readdir,access} from 'node:fs/promises';
 import {parseDocument} from 'yaml';
+import {privacyDocument} from '../web/privacy-policy.js';
 import {fireflyFrames} from '../web/firefly-frames.js';
 const root=new URL('../',import.meta.url),read=path=>readFile(new URL(path,root),'utf8');
 for(const file of await readdir(new URL('.github/workflows/',root))){
@@ -30,10 +31,11 @@ assert.equal(ci.on.workflow_dispatch.inputs.build_release.default,false,'Signed 
 assert.equal(ci.jobs.android.env,undefined,'Untrusted Android checks must not receive signing secrets');
 for(const file of ['android-release.yml','terraform-deploy.yml']){
   const job=parseDocument(await read('.github/workflows/'+file)).toJS().jobs.android;
-  assert.equal(job.if,"github.ref == 'refs/heads/main'");
+  assert.equal(job.if,file==='terraform-deploy.yml'?"github.ref == 'refs/heads/main' && inputs.build_release":"github.ref == 'refs/heads/main'");
   assert.ok(job.steps.some(step=>step.run==='node scripts/android-signing.mjs verify'),'Release APK certificate must be verified');
   assert.ok(job.steps.some(step=>step.if==='always()'&&step.run==='node scripts/android-signing.mjs clean'),'Signing material must be cleaned after failures too');
 }
+assert.equal((await read('web/privacy.html')).trimEnd(),privacyDocument,'Privacy HTML is stale; run node scripts/sync-privacy.mjs');
 const dependabot=parseDocument(await read('.github/dependabot.yml'));assert.equal(dependabot.errors.length,0);
 for(const directory of ['', 'aws-leaderboard/']){
   const manifest=JSON.parse(await read(directory+'package.json')),lock=JSON.parse(await read(directory+'package-lock.json'));
@@ -41,7 +43,7 @@ for(const directory of ['', 'aws-leaderboard/']){
 }
 const manifest=JSON.parse(await read('package.json')),gradle=await read('android/app/build.gradle');assert.ok(gradle.includes(`versionName '${manifest.version}'`),'Android and npm versions differ');
 assert.match(await read('android/gradle/wrapper/gradle-wrapper.properties'),/^distributionSha256Sum=[a-f0-9]{64}$/m,'Gradle distribution checksum required');
-for(const file of ['web/motion.js','web/cloud.js','web/cloud-state.js','web/cloud-bridge.js','web/firefly-player.js','web/firefly-frames.js','web/assets/firefly-atlas.png','web/assets/firefly.png','web/hint-overlay.js','web/hearts.js','web/profile.js','web/engine.js','web/daily.js','web/gestures.js','web/leaderboard-client.js','web/leaderboard-config.js']){
+for(const file of ['web/privacy-policy.js','web/privacy.html','web/motion.js','web/cloud.js','web/cloud-state.js','web/cloud-bridge.js','web/firefly-player.js','web/firefly-frames.js','web/assets/firefly-atlas.png','web/assets/firefly.png','web/hint-overlay.js','web/hearts.js','web/profile.js','web/engine.js','web/daily.js','web/gestures.js','web/leaderboard-client.js','web/leaderboard-config.js']){
   await access(new URL(file,root));assert.ok((await read('web/sw.js')).includes('./'+file.slice(4)),`${file}: missing offline cache entry`);
 }
 for(const file of ['engine.js','daily.js'])assert.equal(await read('web/'+file),await read('aws-leaderboard/src/'+file),`${file}: AWS puzzle copy is stale`);

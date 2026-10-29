@@ -13,7 +13,7 @@ A calm, original firefly-themed region puzzle for Android, with a mobile-only br
 
 The public development version is **0.1.0**. Routine changes keep this version; version bumps and signed APK/AAB builds happen only for requested test builds or agreed release milestones. Android's internal `versionCode` stays at **27** after the public-version reset and must increase for the next Play upload. Previously generated artifacts keep their original version labels. Generator/save protocol versions are independent and remain unchanged.
 
-Push CI keeps its normal development builds and quality/security checks. Signed artifacts are opt-in: run **Signed Android release**, or manually run **CI** with **Build signed APK/AAB artifacts after checks pass** selected. An explicitly approved Terraform application deployment also retains its connected-artifact build.
+Push CI keeps its normal development builds and quality/security checks. Signed artifacts are opt-in: run **Signed Android release**, or manually run **CI** with **Build signed APK/AAB artifacts after checks pass** selected. An explicitly approved Terraform application deployment can build connected artifacts when its optional `build_release` input is selected.
 
 ## Play locally
 

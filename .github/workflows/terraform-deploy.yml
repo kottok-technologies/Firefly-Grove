@@ -6,6 +6,10 @@ on:
     types: [ completed ]
   workflow_dispatch:
     inputs:
+      build_release:
+        description: Also build signed APK/AAB after applying (optional)
+        type: boolean
+        default: false
       plan_run_id:
         description: 'Leave empty to plan. To apply, enter the successful plan workflow
           run ID (expires in 24 hours).'
@@ -229,7 +233,7 @@ jobs:
       - name: Remove runner signing key
         if: always()
         run: node scripts/android-signing.mjs clean
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.build_release
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}

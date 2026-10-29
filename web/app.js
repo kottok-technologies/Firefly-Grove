@@ -404,7 +404,7 @@ function showSettings(){
   $('auto-cross').checked=!!state.settings.autoCross;$('haptics').checked=!!state.settings.haptics;
   for(const [id,key]of[['auto-cross','autoCross'],['haptics','haptics']])$(id).onchange=e=>{state.settings[key]=e.target.checked;save();render();};
   $('race-name').value=state.leaderboardProfile.name;
-  $('player-id').textContent=state.leaderboardProfile.localId;
+  $('player-id').textContent=state.leaderboardProfile.id||state.leaderboardProfile.localId;
   $('profile-form').onsubmit=async event=>{
     event.preventDefault();const button=$('profile-save'),status=$('profile-error');button.disabled=true;
     try{await profiles.rename($('race-name').value);if(status.isConnected){$('race-name').value=state.leaderboardProfile.name;status.textContent='Username saved.';}}
@@ -412,6 +412,7 @@ function showSettings(){
     finally{button.disabled=false;}
   };
   $('more-tools').onclick=()=>{dialog('moreTools');$('extra-hint').onclick=()=>offerReward('hints');$('extra-reveal').onclick=()=>offerReward('reveals');};
+  $('privacy-policy').onclick=()=>{dialog('privacy');$('privacy-back').onclick=showSettings;};
   updateCloudSettings();
   $('cloud-connect').onclick=async()=>{await cloud.connect();updateCloudSettings();};
   $('cloud-sync').onclick=async()=>{await cloud.syncNow();updateCloudSettings();};
