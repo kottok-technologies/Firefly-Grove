@@ -17,3 +17,7 @@ Requirements: https://developer.android.com/distribute/google-play/resources/ico
 The upload export was resized with Pillow and checked for exact dimensions, RGB mode and absence of transparency. Text was visually checked: “Firefly Grove” and “A little logic. A little light.” No version bump or app build.
 
 Requirements: https://support.google.com/googleplay/android-developer/answer/9866151
+
+## Preview video
+
+`firefly-grove-play-preview.mp4` is a 25-second portrait gameplay trailer (1080 × 1920, H.264/AAC). `firefly-grove-trailer-poster.jpg` is its portrait poster. See [TRAILER.md](TRAILER.md) for capture sources, assembly, audio provenance, checks and YouTube/Play Console instructions.
