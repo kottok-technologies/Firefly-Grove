@@ -12,6 +12,8 @@ Implementation is ready for configuration and end-to-end testing. It is not acti
 
 ## Build configuration
 
+The configured Firefly Grove Play Games Services project ID is **877204785726**. It is set in the local ignored properties file and GitHub Actions repository variable. Authentication, Saved Games availability and two-device restoration still require testing with the matching Android credentials and authorized tester accounts.
+
 CI's signed Android jobs read the repository variable **PLAY_GAMES_PROJECT_ID**. Set it to the numeric ID from step 5. It is passed to Gradle as ANDROID_PLAY_GAMES_PROJECT_ID. Existing signing secrets stay unchanged.
 
 For a local build, copy android/play-games.properties.example to android/play-games.properties and set projectId to that same numeric ID. The local file is ignored by Git. Alternatively pass -PplayGamesProjectId=NUMERIC_ID to Gradle. The project property takes precedence, followed by the environment variable, followed by the local properties file. Zero means unconfigured.
