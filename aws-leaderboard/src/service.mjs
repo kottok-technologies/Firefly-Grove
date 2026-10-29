@@ -28,7 +28,7 @@ export function createHandler(store,{now=()=>Date.now()}={}){
     try{
       const method=event.requestContext?.http?.method||event.httpMethod,path=(event.rawPath||event.path||'').replace(/\/$/,'');
       if(method==='OPTIONS')return {statusCode:204,headers,body:''};
-      if(path==='/api/v1/privacy'&&['GET','HEAD'].includes(method))return {statusCode:200,headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=300','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",'referrer-policy':'no-referrer'},body:method==='HEAD'?'':privacyDocument};
+      if(['/api/v1/privacy','/privacy-policy.html'].includes(path)&&['GET','HEAD'].includes(method))return {statusCode:200,headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=300','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",'referrer-policy':'no-referrer'},body:method==='HEAD'?'':privacyDocument};
       const time=now(),today=dailyKey(new Date(time));
       if(path==='/api/v1/health'&&method==='GET')return respond({ok:true,version:'speed-v1',day:today,provider:'aws',journeyHearts:'journey-v3'});
       const body=()=>{

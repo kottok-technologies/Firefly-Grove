@@ -1,5 +1,8 @@
 mock_provider "aws" {
   override_during = plan
+  mock_data "aws_route53_zone" {
+    defaults = { zone_id = "Z04953103Q1MLPH3O4LF5", name = "kottok-technologies.com.", private_zone = false }
+  }
   mock_resource "aws_kms_key" {
     defaults = { arn = "arn:aws:kms:us-east-1:111111111111:key/11111111-1111-1111-1111-111111111111", key_id = "11111111-1111-1111-1111-111111111111" }
   }
@@ -27,9 +30,27 @@ variables {
 mock_provider "aws" {
   alias           = "stage"
   override_during = plan
+  mock_resource "aws_acm_certificate" {
+    defaults = {
+      arn                       = "arn:aws:acm:us-east-1:111111111111:certificate/11111111-1111-1111-1111-111111111111"
+      domain_validation_options = [{ domain_name = "www.kottok-technologies.com", resource_record_name = "_test.www.kottok-technologies.com.", resource_record_type = "CNAME", resource_record_value = "_test.acm-validations.aws." }]
+    }
+  }
 }
 run "production_security_defaults" {
   command = plan
+  assert {
+    condition     = aws_apigatewayv2_domain_name.privacy.domain_name == "www.kottok-technologies.com" && aws_apigatewayv2_domain_name.privacy.domain_name_configuration[0].security_policy == "TLS_1_2" && aws_apigatewayv2_api_mapping.privacy.api_mapping_key == "games/fireflygrove"
+    error_message = "Privacy must use the requested HTTPS domain and exact path mapping."
+  }
+  assert {
+    condition     = aws_route53_record.privacy_www.zone_id == "Z04953103Q1MLPH3O4LF5" && aws_route53_record.privacy_www.name == "www.kottok-technologies.com" && aws_acm_certificate.privacy.validation_method == "DNS"
+    error_message = "Use the verified zone and only the new www alias plus certificate validation."
+  }
+  assert {
+    condition     = toset([for route in aws_apigatewayv2_route.privacy : route.route_key]) == toset(["GET /privacy-policy.html", "HEAD /privacy-policy.html"]) && endswith(aws_lambda_permission.privacy.source_arn, "/privacy-policy.html") && aws_lambda_permission.privacy.source_account == var.aws_account_id
+    error_message = "Only privacy GET/HEAD routes should receive the extra Lambda permission."
+  }
   assert {
     condition     = aws_dynamodb_table.scores.deletion_protection_enabled && aws_dynamodb_table.scores.point_in_time_recovery[0].enabled && aws_dynamodb_table.scores.server_side_encryption[0].enabled
     error_message = "Production scores need deletion protection, PITR and encryption."

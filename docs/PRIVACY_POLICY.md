@@ -4,13 +4,13 @@ Developer: Kottok Technologies. Privacy/deletion contact: kottok.technologies@gm
 
 Public URL after the matching API deployment:
 
-https://w51xbjq2xa.execute-api.us-east-1.amazonaws.com/api/v1/privacy
+https://www.kottok-technologies.com/games/fireflygrove/privacy-policy.html
 
 The same page includes an externally accessible deletion-request section at:
 
-https://w51xbjq2xa.execute-api.us-east-1.amazonaws.com/api/v1/privacy#delete-data
+https://www.kottok-technologies.com/games/fireflygrove/privacy-policy.html#delete-data
 
-`web/privacy-policy.js` is the canonical, static policy. The existing AWS Lambda bundles and serves it without authentication, database access, scripts or external assets. No new AWS resources or permissions are required. It is publicly readable HTML rather than a PDF or an authenticated document. `GET` and `HEAD` are supported. The packaged Settings reader uses exactly the same policy content and works offline.
+`web/privacy-policy.js` is the canonical, static policy. The existing AWS Lambda bundles and serves it without authentication, database access, scripts or external assets. The custom domain uses a dedicated DNS-validated ACM certificate, a regional API Gateway domain with a `games/fireflygrove` mapping, a new www alias in the verified existing Route 53 zone, and exact GET/HEAD routes. Terraform manages only the new records, not the zone or its existing mail records. The original API URL `https://w51xbjq2xa.execute-api.us-east-1.amazonaws.com/api/v1/privacy` remains an alternate endpoint. It is publicly readable HTML rather than a PDF or an authenticated document. `GET` and `HEAD` are supported. The packaged Settings reader uses exactly the same policy content and works offline.
 
 After editing the canonical content, run `node scripts/sync-privacy.mjs` to refresh `web/privacy.html`. CI rejects a stale offline copy. The API update must pass CI and CodeQL, then go through the existing reviewed Terraform plan/apply workflow and required production approval. Leave `build_release` unchecked: publishing the policy does not require an APK/AAB or a version bump. Confirm the live page returns HTTP 200, contains the correct email and policy date, and can be read without a login before entering the URL in Play Console. Existing installed APKs gain the Settings reader only after a requested app update.
 

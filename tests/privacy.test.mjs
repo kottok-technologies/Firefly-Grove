@@ -8,7 +8,7 @@ import {privacyDocument} from '../web/privacy-policy.js';
 test('privacy policy is public HTML without authentication or database access',async()=>{
   const store=new Proxy({},{get(){throw Error('Policy must not access player data');}});
   const handler=createHandler(store);
-  for(const path of ['/api/v1/privacy','/api/v1/privacy/']){
+  for(const path of ['/api/v1/privacy','/api/v1/privacy/','/privacy-policy.html']){
     const response=await handler({rawPath:path,requestContext:{http:{method:'GET'}},headers:{authorization:'Bearer invalid'}});
     assert.equal(response.statusCode,200);assert.equal(response.headers['content-type'],'text/html; charset=utf-8');
     assert.equal(response.body,privacyDocument);assert.match(response.headers['content-security-policy'],/default-src 'none'/);
@@ -19,7 +19,7 @@ test('privacy policy is public HTML without authentication or database access',a
     assert.ok(document.querySelector('a[href="mailto:kottok.technologies@gmail.com"]'));
     dom.window.close();
   }
-  const head=await handler({path:'/api/v1/privacy',httpMethod:'HEAD'});
+  const head=await handler({path:'/privacy-policy.html',httpMethod:'HEAD'});
   assert.equal(head.statusCode,200);assert.equal(head.body,'');assert.match(head.headers['content-type'],/text\/html/);
   assert.equal((await readFile(new URL('../web/privacy.html',import.meta.url),'utf8')).trimEnd(),privacyDocument,'offline and public policies stay identical');
 });
