@@ -24,7 +24,7 @@ Deleting local storage is separate from deleting the AWS profile or Google Saved
 
 ## Before Play submission
 
-Ensure the Play Data safety answers match actual app and SDK behavior. Google Play Games has its own analytics/diagnostics collection even though no separate developer analytics or live ad SDK is installed. Target-audience/Families declarations are separate from this policy. Review the policy when adding ads, analytics, new data fields or new retention practices; do not silently rely on this version for those changes.
+Ensure the Play Data safety answers match actual app and SDK behavior. Google Play Games has its own analytics/diagnostics collection and the integrated AdMob SDK has its own data handling. The October 30 policy update describes rewarded ads; deploy it through the protected Terraform workflow before distributing an ad-enabled release. See ADS.md. Target-audience/Families declarations are separate from this policy. Review the policy when adding ads, analytics, new data fields or new retention practices; do not silently rely on this version for those changes.
 
 References:
 

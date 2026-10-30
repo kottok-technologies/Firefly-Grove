@@ -31,6 +31,7 @@ public final class MainActivity extends Activity {
     private static final String APP_URL = "https://appassets.androidplatform.net/assets/index.html";
     private WebView web;
     private PlayGamesCloud cloud;
+    private RewardAds ads;
     private OnBackInvokedCallback backCallback;
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -59,6 +60,7 @@ public final class MainActivity extends Activity {
         web.getSettings().setGeolocationEnabled(false);
         web.getSettings().setMediaPlaybackRequiresUserGesture(true);
         cloud = new PlayGamesCloud(this, web);
+        ads = new RewardAds(this, web);
         web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) { return intercept(loader, request); }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return !isPackagedAsset(request.getUrl()); }
@@ -89,6 +91,7 @@ public final class MainActivity extends Activity {
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
         }
         web.loadUrl(APP_URL);
+        ads.start();
     }
     private static boolean isPackagedAsset(Uri uri) {
         return WebSecurityPolicy.isPackagedAsset(uri.toString());
@@ -118,7 +121,7 @@ public final class MainActivity extends Activity {
         return new WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden", headers,
             new ByteArrayInputStream("Blocked by the packaged app policy.".getBytes(StandardCharsets.UTF_8)));
     }
-    @Override protected void onPause() { web.evaluateJavascript("document.dispatchEvent(new Event('firefly-pause'))", null); web.onPause(); super.onPause(); }
+    @Override protected void onPause() { ads.pause(); web.evaluateJavascript("document.dispatchEvent(new Event('firefly-pause'))", null); web.onPause(); super.onPause(); }
     @Override protected void onResume() {
         super.onResume();
         if (web != null) { web.onResume(); web.evaluateJavascript("document.dispatchEvent(new Event('firefly-resume'))", null); }
@@ -153,6 +156,6 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (Build.VERSION.SDK_INT >= 33 && backCallback != null)
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
-        cloud.destroy(); web.destroy(); super.onDestroy();
+        ads.destroy(); cloud.destroy(); web.destroy(); super.onDestroy();
     }
 }

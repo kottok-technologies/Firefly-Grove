@@ -42,7 +42,8 @@
       "web/firefly-player.js",
       "web/cloud.js",
       "web/cloud-state.js",
-      "web/cloud-bridge.js"
+      "web/cloud-bridge.js",
+      "web/reward-bridge.js"
     ],
     "reporter": [
       "text",

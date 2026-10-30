@@ -1,6 +1,7 @@
 import {createMotion} from './motion.js';
 import {createFireflyPlayer,FOUND_DURATION} from './firefly-player.js';
 import {cloudBridge} from './cloud-bridge.js';
+import {rewardBridge} from './reward-bridge.js';
 import {cloudManager} from './cloud.js';
 import {parseDeviceBackup} from './cloud-state.js';
 import {hintFocus,renderHintBoard} from './hint-overlay.js';
@@ -12,6 +13,8 @@ import { createGame, applyMove, findHint, isTarget, levelConfig } from './engine
 import { cellsAlongSegment, paintNotes } from './gestures.js';
 import {dailyKey,createDailyGame,beginDailyRun,dailyElapsed,freezeDailyRun,recordDailyResult,formatSpeed} from './daily.js';
 const $ = id => document.getElementById(id);
+const rewardAds=rewardBridge();
+let rewardPending=false;
 const STORAGE = 'firefly-grove-v1';
 const DOUBLE_TAP_MS = 600;
 const CARE_PACKAGE_LEVELS = 10;
@@ -101,7 +104,7 @@ function showHint(hint,kind){
 }
 function dialog(name,values){cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');const replacing=modal.open;renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();if(replacing)motion.enter($('modal-content'));}
 function cancelCloudChoice(){const cancel=cloudChoiceCancel;cloudChoiceCancel=null;if(cancel)void cancel();}
-function close(){cancelCloudChoice();modal.close();finishHint();tick=Date.now();scheduleIdle();}
+function close(){if(rewardPending)rewardAds?.cancel();cancelCloudChoice();modal.close();finishHint();tick=Date.now();scheduleIdle();}
 $('close-modal').onclick=()=>{if(!isPlaying||!game||game.lives>0)close();};
 modal.addEventListener('close',()=>{if(!modal.open){cancelCloudChoice();finishHint();tick=Date.now();scheduleIdle();}});
 modal.addEventListener('cancel',e=>{if(isPlaying&&game?.lives<=0||cloudChoiceCancel&&cloud?.status().working)e.preventDefault();});
@@ -382,10 +385,28 @@ function showLoss(){
   dialog('journeyLoss');$('retry').onclick=()=>{close();newLevel(true);};$('revive').onclick=()=>offerReward('life');
 }
 function offerReward(kind){
+  if(rewardPending)return;
   const native=location.origin==='https://appassets.androidplatform.net';
-  dialog('reward',{symbol:kind==="life"?"♡":"✧",details:`${kind==="life"?"Restore one life":kind==="hints"?"Add one hint":"Add one firefly reveal"} with an optional reward video. You can always keep playing and earn tools every ten completed levels.`,note:native?"Reward videos are unavailable until an ad provider is configured for this Android build.":"Browser preview: this is a simulated reward. No real advertisement will play.",back:game?.lives===0?"Back to restart":"Back to the grove"});
-  $('preview-reward').hidden=native;
-  if(!native)$('preview-reward').onclick=()=>{if(kind==='life'){game.heartFinds.push(-1);game.lives=1;}else state[kind]++;save();render();close();message(kind==='life'?'One life restored. Take your time.':'Your preview reward is ready. Select the tool to use it.');};
+  const rewardGame=game;
+  dialog('reward',{symbol:kind==="life"?"♡":"✧",details:`${kind==="life"?"Restore one life":kind==="hints"?"Add one hint":"Add one firefly reveal"} with an optional reward video. You can always keep playing and earn tools every ten completed levels.`,note:native?(rewardAds?"Choose Watch video to earn your reward. Closing before earning it gives no reward.":"Reward videos are unavailable on this device."):"Browser preview: this is a simulated reward. No real advertisement will play.",back:game?.lives===0?"Back to restart":"Back to the grove"});
+  const button=$('preview-reward'),note=$('modal-content').querySelector('.reward-note');
+  note.setAttribute('role','status');note.setAttribute('aria-live','polite');
+  button.hidden=native&&!rewardAds;
+  button.textContent=native?'Watch video':'Try preview reward';
+  button.onclick=async()=>{
+    if(rewardPending)return;
+    rewardPending=true;button.disabled=true;button.textContent=native?'Loading video…':'Preparing reward…';
+    try{
+      const result=native?await rewardAds.request('show',kind):{earned:true};
+      if(result.earned!==true){note.textContent='Video closed. No reward was earned. You can try again or keep playing.';return;}
+      if(kind==='life'){
+        if(game!==rewardGame||game.completed||game.lives!==0){message('That puzzle has changed. Your current game is safe.');return;}
+        game.heartFinds.push(-1);game.lives=1;
+      }else state[kind]++;
+      save();render();if(button.isConnected)close();message(kind==='life'?'One life restored. Take your time.':'Your reward is ready. Select the tool to use it.');
+    }catch(error){note.textContent=error.message;}
+    finally{rewardPending=false;button.disabled=false;button.textContent=native?'Watch video':'Try preview reward';}
+  };
   $('reward-back').onclick=()=>{if(isPlaying&&game?.lives===0)showLoss();else close();};
 }
 function tool(kind){
@@ -413,6 +434,11 @@ function showSettings(){
   };
   $('more-tools').onclick=()=>{dialog('moreTools');$('extra-hint').onclick=()=>offerReward('hints');$('extra-reveal').onclick=()=>offerReward('reveals');};
   $('privacy-policy').onclick=()=>{dialog('privacy');$('privacy-back').onclick=showSettings;};
+  const adPrivacy=$('ad-privacy');
+  if(rewardAds){
+    void rewardAds.request('status').then(status=>{if(adPrivacy.isConnected)adPrivacy.hidden=!status.privacyRequired;}).catch(()=>{});
+    adPrivacy.onclick=async()=>{adPrivacy.disabled=true;try{await rewardAds.request('privacy');}catch(error){message(error.message);}finally{adPrivacy.disabled=false;}};
+  }
   updateCloudSettings();
   $('cloud-connect').onclick=async()=>{await cloud.connect();updateCloudSettings();};
   $('cloud-sync').onclick=async()=>{await cloud.syncNow();updateCloudSettings();};

@@ -50,3 +50,6 @@ reports/
 infrastructure/**/plan.txt
 infrastructure/**/manifest.json
 infrastructure/**/build/
+
+# Local AdMob public ID configuration
+android/ads.properties

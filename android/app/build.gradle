@@ -13,6 +13,15 @@ if (playGamesFile.exists()) playGamesFile.withInputStream { playGamesProperties.
 def playGamesProjectId = project.findProperty('playGamesProjectId') ?: System.getenv('ANDROID_PLAY_GAMES_PROJECT_ID') ?: playGamesProperties.getProperty('projectId', '0')
 if (playGamesProjectId != '0' && !(playGamesProjectId ==~ /[1-9][0-9]{5,19}/)) throw new GradleException('Invalid Play Games Services project ID.')
 
+// Public IDs, not credentials. Debug always uses Google's dedicated test inventory.
+def adProperties = new Properties()
+def adFile = rootProject.file('ads.properties')
+if (adFile.exists()) adFile.withInputStream { adProperties.load(it) }
+def adAppId = System.getenv('ANDROID_ADMOB_APP_ID') ?: adProperties.getProperty('appId', 'ca-app-pub-3940256099942544~3347511713')
+def adUnitId = System.getenv('ANDROID_ADMOB_REWARDED_ID') ?: adProperties.getProperty('rewardedId', 'ca-app-pub-3940256099942544/5224354917')
+if (!(adAppId ==~ /ca-app-pub-[0-9]{16}~[0-9]{10}/) || !(adUnitId ==~ /ca-app-pub-[0-9]{16}\/[0-9]{10}/)) throw new GradleException('Invalid AdMob identifiers.')
+if (adAppId.startsWith('ca-app-pub-3940256099942544') && !adUnitId.startsWith('ca-app-pub-3940256099942544')) throw new GradleException('A production ad unit requires your own AdMob app ID.')
+
 android {
     namespace 'com.fireflygrove.game'
     compileSdk 36
@@ -35,7 +44,13 @@ android {
         }
     }
     buildTypes {
+        debug {
+            resValue 'string', 'admob_app_id', adAppId
+            resValue 'string', 'rewarded_ad_unit_id', 'ca-app-pub-3940256099942544/5224354917'
+        }
         release {
+            resValue 'string', 'admob_app_id', adAppId
+            resValue 'string', 'rewarded_ad_unit_id', adUnitId
             signingConfig signingConfigs.release
         }
     }
@@ -54,5 +69,7 @@ tasks.configureEach { task ->
 dependencies {
     implementation 'androidx.webkit:webkit:1.12.1'
     implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
+    implementation 'com.google.android.gms:play-services-ads:25.5.0'
+    implementation 'com.google.android.ump:user-messaging-platform:4.0.0'
     testImplementation 'junit:junit:4.13.2'
 }

@@ -31,7 +31,7 @@ The single enablement warning may be triaged as a false positive for this constr
 
 The 1.9.0 local suite has 83 passing Node tests, including actual DynamoDB Local transactions, cloud conflicts/restores and security regressions, with 100% line coverage and over 95% branch coverage across the explicitly configured JavaScript core. UI event wiring and Android runtime behavior are outside that coverage calculation. Native URL/CSP tests are separate JVM tests. Android compilation/lint and hosted CodeQL/security scans must also pass. Browser checks cover settings, reward dialogs and daily generation; device/emulator testing remains appropriate for the hardened shell.
 
-Static scanning and these tests do not prove absence of all vulnerabilities. Keep dependency updates, weekly scans and the high/critical deployment gate enabled. Future rewarded ads must use an origin-restricted adapter and grant only on the native SDK's earned-reward callback; no live ad network is currently configured.
+Static scanning and these tests do not prove absence of all vulnerabilities. Keep dependency updates, weekly scans and the high/critical deployment gate enabled. Future rewarded ads must use an origin-restricted adapter and grant only on the native SDK's earned-reward callback; production IDs are not currently configured. The native rewarded-ad adapter is now implemented; see ADS.md for child-directed settings, callback rules and device checks.
 
 ## Play Games cloud channel — 1.9.0
 
