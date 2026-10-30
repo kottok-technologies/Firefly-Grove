@@ -49,7 +49,6 @@ final class RewardAds {
             .setMaxAdContentRating(RequestConfiguration.MAX_AD_CONTENT_RATING_G)
             .setPublisherPrivacyPersonalizationState(RequestConfiguration.PublisherPrivacyPersonalizationState.DISABLED)
             .build());
-        MobileAds.putPublisherFirstPartyIdEnabled(false);
         consent.requestConsentInfoUpdate(activity, new ConsentRequestParameters.Builder().setTagForUnderAgeOfConsent(true).build(),
             () -> { if (!destroyed) UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity, error -> consentReady = true); },
             error -> consentReady = true);
@@ -89,7 +88,17 @@ final class RewardAds {
             handler.postDelayed(timeout, 60000);
             if (initialized) load(session, proxy, id, timeout);
             else MobileAds.initialize(activity, status -> activity.runOnUiThread(() -> {
-                initialized = true; if (active(session)) load(session, proxy, id, timeout);
+                // This API throws before MobileAds.initialize completes. Keep it
+                // out of launch-time consent setup and before the first ad load.
+                try {
+                    if (!MobileAds.putPublisherFirstPartyIdEnabled(false)) {
+                        finish(session, proxy, id, false, "Reward videos are unavailable. Please try again later."); return;
+                    }
+                    initialized = true;
+                    if (active(session)) load(session, proxy, id, timeout);
+                } catch (IllegalStateException unavailable) {
+                    finish(session, proxy, id, false, "Reward videos are unavailable. Please try again later.");
+                }
             }));
         } catch (JSONException ignored) { /* Reject malformed messages without exposing SDK methods. */ }
     }
