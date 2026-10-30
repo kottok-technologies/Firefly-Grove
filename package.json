@@ -38,6 +38,7 @@
       "web/profile.js",
       "web/hearts.js",
       "aws-leaderboard/src/journey.mjs",
+      "aws-leaderboard/src/kid-client.mjs",
       "web/hint-overlay.js",
       "web/firefly-player.js",
       "web/cloud.js",
