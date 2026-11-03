@@ -40,7 +40,10 @@ test('DynamoDB transactions preserve one best score through retries and concurre
     }
     for(const row of top)await document.send(new PutCommand({TableName:table,Item:row}));
     await document.send(new PutCommand({TableName:table,Item:{pk:'DAY#'+day,sk:'META',count:53}}));
+    store.topCache.clear(); // Direct fixture inserts bypass application invalidation.
     board=await store.board(day,player.id);assert.equal(board.entries.length,50);assert.equal(board.mine.rank,53);assert.equal(board.total,53);
+    assert.equal(await store.placementRank('speed',day,player.id),null);
+    assert.equal((await store.standing('speed',day,player.id)).mine.rank,53);
     assert.equal((await store.queryAll({KeyConditionExpression:'pk=:day',ExpressionAttributeValues:{':day':'DAY#'+day}})).length,55);
     assert.equal((await store.board('2026-10-26')).total,0);
     assert.ok(improves({elapsedMs:100,mistakes:0},{elapsedMs:100,mistakes:1}));assert.ok(rankKey({elapsedMs:9,mistakes:0,finishedAt:1,playerId:'a'})<rankKey({elapsedMs:10,mistakes:0,finishedAt:1,playerId:'a'}));
@@ -70,6 +73,8 @@ test('journey hearts are atomic, deduplicate across days, and share ranks outsid
     await finish(c,1,1);board=await store.heartsBoard(day,c);
     assert.equal(board.entries.length,50);assert.equal(board.total,53);assert.equal(board.mine.rank,53);
     assert.equal((await store.heartsBoard(day,last)).mine.rank,3,'ties share rank even when a player is outside the top 50');
+    assert.equal(await store.placementRank('hearts',day,last),3,'reward eligibility preserves ties outside the top 50');
+    assert.equal(await store.placementRank('hearts',day,c),null);
     assert.equal((await store.heartsBoard(day)).mine,null);
     const rows=await store.queryAll({KeyConditionExpression:'pk=:day AND begins_with(sk,:prefix)',ExpressionAttributeValues:{':day':'HEARTDAY#'+day,':prefix':'HEARTS#'}});
     assert.equal(rows.length,53,'superseded totals leave no stale ranking entries');

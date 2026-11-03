@@ -12,6 +12,7 @@ test('Home rewards screen saves both prizes and reopening does not add them agai
   const values={window,document:window.document,location:window.location,localStorage:window.localStorage,navigator:window.navigator,matchMedia:()=>({matches:true,addEventListener(){}}),ResizeObserver:class{observe(){}},setInterval:()=>0,
     fetch:async(url,options)=>({ok:true,json:async()=>{
       if(url.endsWith('/rewards/claim')){claims++;const {board,day}=JSON.parse(options.body);return {id:board+':'+day,board,day,rank:1,hints:5,reveals:3};}
+      if(url.includes('/rewards?'))return {status:'eligible',rank:1,hints:5,reveals:3};
       return {mine:{rank:1},total:1,entries:[]};
     }})};
   const previous=Object.fromEntries(Object.keys(values).map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));

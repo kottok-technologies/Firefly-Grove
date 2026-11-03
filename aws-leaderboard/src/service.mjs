@@ -59,17 +59,18 @@ export function createHandler(store,{now=()=>Date.now()}={}){
         await store.createPlayer({id,name,tokenHash:hash(token),createdAt:time});return respond({...playerView({id,name}),token},201);
       }
       const player=await authenticate();
-      if(path==='/api/v1/rewards/claim'&&method==='POST'){
+      if(path==='/api/v1/rewards'&&method==='GET'||path==='/api/v1/rewards/claim'&&method==='POST'){
         await limit('reward:'+player.id,60,60000);
-        const {board,day}=body();
+        const {board,day}=method==='GET'?event.queryStringParameters||{}:body();
         if(!['speed','hearts'].includes(board)||typeof day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day+'T00:00:00Z'))||dailyKey(new Date(day+'T00:00:00Z'))!==day)throw new ApiError(400,'Choose a leaderboard and a valid UTC date.');
         const receipt=await store.getPlacementReward(player.id,board,day);
-        if(receipt)return respond(receipt);
-        if(time<rewardClosesAt(day,board))throw new ApiError(409,'These standings are still open. Return after the reward unlocks.');
-        if(time>=Date.parse(day+'T00:00:00Z')+91*86400000)throw new ApiError(410,'The 90-day reward claim window has ended.');
-        const standings=board==='speed'?await store.board(day,player.id):await store.heartsBoard(day,player.id);
-        const rank=standings.mine?.rank,prize=placementPrize(rank);
-        if(!prize)throw new ApiError(409,'Only a top 10 placement earns a reward.');
+        if(receipt)return respond(method==='GET'?{status:'eligible',rank:receipt.rank,receipt}:receipt);
+        const unlocksAt=rewardClosesAt(day,board);
+        if(time<unlocksAt){if(method==='GET')return respond({status:'pending',unlocksAt});throw new ApiError(409,'These standings are still open. Return after the reward unlocks.');}
+        if(time>=Date.parse(day+'T00:00:00Z')+91*86400000){if(method==='GET')return respond({status:'expired'});throw new ApiError(410,'The 90-day reward claim window has ended.');}
+        const rank=await store.placementRank(board,day,player.id),prize=placementPrize(rank);
+        if(!prize){if(method==='GET')return respond({status:'ineligible'});throw new ApiError(409,'Only a top 10 placement earns a reward.');}
+        if(method==='GET')return respond({status:'eligible',rank,hints:prize.hints,reveals:prize.reveals});
         return respond(await store.savePlacementReward(player.id,{id:board+':'+day,board,day,rank,hints:prize.hints,reveals:prize.reveals}));
       }
       if(path==='/api/v1/journey/finish'&&method==='POST'){
@@ -78,7 +79,7 @@ export function createHandler(store,{now=()=>Date.now()}={}){
         if(input.day!==today)throw new ApiError(410,'Hearts must upload on the UTC day the level was completed.');
         const completion=validateJourneyCompletion(input);
         const result=await store.finishJourney({...completion,playerId:player.id,day:today});
-        return respond({...result,day:today,...await store.heartsBoard(today,player.id)});
+        return respond({...result,day:today,...await store.standing('hearts',today,player.id)});
       }
       if(path==='/api/v1/profile'&&method==='GET')return respond(playerView(player));
       if(path==='/api/v1/profile'&&method==='PUT'){
@@ -101,7 +102,7 @@ export function createHandler(store,{now=()=>Date.now()}={}){
           const mistakes=validateFinds(run.day,input.finds);
           run=await store.finishRun({...run,status:'finished',finishedAt:time,elapsedMs,mistakes});
         }
-        const board=await store.board(run.day,player.id);return respond({day:run.day,elapsedMs:run.elapsedMs,mistakes:run.mistakes,mine:board.mine,total:board.total});
+        const board=await store.standing('speed',run.day,player.id);return respond({day:run.day,elapsedMs:run.elapsedMs,mistakes:run.mistakes,mine:board.mine,total:board.total});
       }
       throw new ApiError(404,'Endpoint not found.');
     }catch(error){

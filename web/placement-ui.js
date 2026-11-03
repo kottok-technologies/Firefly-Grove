@@ -10,10 +10,12 @@ export async function renderPlacementRewards({container,day,api,profile,rewards,
     if(Date.now()<closes){status.textContent='Rewards unlock '+new Date(closes).toLocaleString()+'.';continue;}
     status.textContent='Checking your placement…';
     try{
-      const result=await api((board==='speed'?'leaderboard':'hearts')+'?day='+encodeURIComponent(day),{profile});
+      const result=await api('rewards?board='+board+'&day='+encodeURIComponent(day),{profile});
       if(!container.isConnected)return;
-      const rank=result.mine?.rank;
-      if(!rank||rank>10){status.textContent=rank?'You placed #'+rank+'. Top 10 earn perks.':'No ranked finish for this date.';continue;}
+      if(result.status==='pending'){status.textContent='Rewards unlock '+new Date(result.unlocksAt).toLocaleString()+'.';continue;}
+      if(result.status==='expired'){status.textContent='The 90-day reward claim window has ended.';continue;}
+      const rank=result.rank;
+      if(result.status!=='eligible'||!rank||rank>10){status.textContent='No top 10 placement for this date. Top 10 earn perks.';continue;}
       status.textContent='You placed #'+rank+'. Claim your hints and reveals below.';button.hidden=false;
       button.onclick=async()=>{
         button.disabled=true;status.textContent='Saving your reward…';

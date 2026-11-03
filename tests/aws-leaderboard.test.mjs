@@ -24,6 +24,8 @@ function fixture(){
   const prizes=new Map();
   store.getPlacementReward=async(id,board,date)=>prizes.get(id+board+date)||null;
   store.savePlacementReward=async(id,receipt)=>{const key=id+receipt.board+receipt.day;if(!prizes.has(key))prizes.set(key,receipt);return prizes.get(key);};
+  store.placementRank=async(board,date,id)=>(await (board==='hearts'?store.heartsBoard(date,id):store.board(date,id))).mine?.rank||null;
+  store.standing=async(board,date,id)=>{const {entries:_entries,...standing}=await (board==='hearts'?store.heartsBoard(date,id):store.board(date,id));return standing;};
   const handler=createHandler(store,{now:()=>now});
   return {store,advance(ms){now+=ms;},async call(path,{body,player,method=body?'POST':'GET',headers={},...event}={}){
     const url=new URL('https://test.invalid/api/v1/'+path),response=await handler({rawPath:url.pathname,queryStringParameters:Object.fromEntries(url.searchParams),requestContext:{http:{method,sourceIp:'192.0.2.1'}},headers:{...(body?{'content-type':'application/json'}:{}),...(player?{authorization:'Bearer '+player.token}:{}),...headers},...(body?{body:JSON.stringify(body)}:{}),...event});return {...response,data:response.body?JSON.parse(response.body):null};
@@ -38,19 +40,30 @@ test('placement rewards enforce ownership, final standings, tiers and durable re
   assert.equal((await claim(null)).statusCode,401);
   for(const [board,date] of [['bad',day],['hearts','bad'],['speed','2026-02-30'],['hearts',null]])assert.equal((await claim(a,board,date)).statusCode,400);
   assert.equal((await claim(a)).statusCode,409);
+  const status=(player,board='hearts')=>f.call('rewards?board='+board+'&day='+day,{player});
+  assert.equal((await status(null)).statusCode,401);
+  assert.equal((await status(a)).data.status,'pending');
+  assert.equal((await f.call('rewards?board=bad&day='+day,{player:a})).statusCode,400);
   await f.call('journey/finish',{player:a,body:journey()});
   const run=(await start(f,a)).data;f.advance(10000);await f.call('finish',{player:a,body:{runId:run.id,finds}});
   f.advance(12*3600000);
+  assert.equal((await status(a)).data.status,'eligible');assert.equal((await status(b)).data.status,'ineligible');
+  f.store.board=async()=>{throw Error('Claims must not load a public board');};
   let reward=await claim(a);assert.equal(reward.statusCode,200);assert.equal(reward.data.hints,5);assert.equal(reward.data.reveals,3);
+  const originalStanding=f.store.standing;f.store.standing=async()=>{throw Error('Claims must not calculate a full rank');};
   assert.deepEqual((await claim(a)).data,reward.data);
+  assert.deepEqual((await status(a)).data.receipt,reward.data);
   assert.equal((await claim(b)).statusCode,409);
+  f.store.standing=originalStanding;
   assert.equal((await claim(a,'speed')).statusCode,409);
   f.advance(36*3600000);
+  f.store.placementRank=async(board,date,id)=>board==='speed'?1:(await f.store.heartsBoard(date,id)).mine?.rank||null;
   reward=await claim(a,'speed');assert.equal(reward.statusCode,200);assert.equal(reward.data.id,'speed:'+day);
   f.store.heartsBoard=async()=>({mine:{rank:3}});assert.equal((await claim(b)).data.hints,3);
   const c=await register(f,'Cricket');f.store.heartsBoard=async()=>({mine:{rank:10}});assert.equal((await claim(c)).data.hints,1);
   const d=await register(f,'Dapple');f.store.heartsBoard=async()=>({mine:{rank:11}});assert.equal((await claim(d)).statusCode,409);
   f.advance(91*86400000);
+  assert.equal((await status(d)).data.status,'expired');
   assert.equal((await claim(d)).statusCode,410);
   assert.equal((await claim(a)).statusCode,200,'existing receipts survive board expiry');
 });
@@ -71,6 +84,7 @@ test('AWS finish uses server time, enforces ownership and retries idempotently',
   assert.equal((await f.call('finish',{player:a,body:{runId:run.id,finds:finds.slice(1)}})).statusCode,400);
   const finish=()=>f.call('finish',{player:a,body:{runId:run.id,finds,elapsedMs:1}});
   const result=await finish();assert.equal(result.statusCode,200);assert.equal(result.data.elapsedMs,20000);assert.equal(result.data.mine.rank,1);
+  assert.equal(result.data.entries,undefined,'completion replies do not fetch the public list');
   f.advance(5000);assert.equal((await finish()).data.elapsedMs,20000);
   const next=(await start(f,a)).data;f.advance(30000);await f.call('finish',{player:a,body:{runId:next.id,finds}});
   const board=(await f.call('leaderboard?day='+day,{player:a})).data;assert.equal(board.total,1);assert.equal(board.mine.elapsedMs,20000);

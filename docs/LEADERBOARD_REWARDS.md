@@ -36,6 +36,13 @@ prize. Client-supplied amounts and ranks are ignored. Invalid dates, open
 competitions, nonwinning ranks, expired claims and unauthenticated requests
 are rejected. Claims are rate limited.
 
+The reward screen uses authenticated `GET /api/v1/rewards?board=...&day=...`
+for eligibility. Both this check and the claim use a bounded count: at most
+ten strictly higher hearts scores, or eleven speed entries including the
+player's own entry. They never calculate a full personal leaderboard rank
+or fetch display names. Hearts ties therefore remain eligible even when
+the player is not among the first 50 displayed entries.
+
 DynamoDB stores one permanent `PRIZE#<board>:<date>` receipt under the player
 partition using a conditional write. Retries and concurrent requests return
 the original receipt. No new table, IAM action or API route is needed: the

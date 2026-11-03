@@ -13,9 +13,44 @@ const heartPlayerKey=(day,id)=>({pk:heartPartition(day),sk:'PLAYER#'+id});
 const heartPrefix=hearts=>'HEARTS#'+String(9999999999-hearts).padStart(10,'0');
 const heartRankKey=(hearts,id)=>heartPrefix(hearts)+'#'+id;
 export class DynamoStore{
-  constructor(tableName,client=DynamoDBDocumentClient.from(new DynamoDBClient({}),{marshallOptions:{removeUndefinedValues:true}})){this.tableName=tableName;this.client=client;}
+  constructor(tableName,client=DynamoDBDocumentClient.from(new DynamoDBClient({}),{marshallOptions:{removeUndefinedValues:true}}),{now=()=>Date.now()}={}){this.tableName=tableName;this.client=client;this.now=now;this.topCache=new Map();}
   send(Command,input){return this.client.send(new Command({TableName:this.tableName,...input}));}
   async get(Key){return (await this.send(GetCommand,{Key,ConsistentRead:true})).Item||null;}
+  async countAhead(board,day,mine,limit){
+    // Hearts exclude every equal score; speed includes this player's complete
+    // ordered key. Stop as soon as the requested rank ceiling is reached.
+    let count=0,cursor;
+    do{
+      const page=await this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND sk BETWEEN :prefix AND :key',ExpressionAttributeValues:{':day':board==='hearts'?heartPartition(day):'DAY#'+day,':prefix':board==='hearts'?'HEARTS#':'SCORE#',':key':board==='hearts'?heartPrefix(mine.hearts):mine.rankKey},Select:'COUNT',Limit:limit-count,ConsistentRead:true,ExclusiveStartKey:cursor});
+      count+=page.Count;cursor=page.LastEvaluatedKey;
+    }while(cursor&&count<limit);
+    return board==='hearts'?count+1:count;
+  }
+  async placementRank(board,day,playerId){
+    const mine=await this.get(board==='hearts'?heartPlayerKey(day,playerId):bestKey(day,playerId));
+    if(!mine)return null;
+    const rank=await this.countAhead(board,day,mine,board==='hearts'?10:11);
+    return rank<=10?rank:null;
+  }
+  async standing(board,day,playerId){
+    const [mine,meta]=await Promise.all([
+      this.get(board==='hearts'?heartPlayerKey(day,playerId):bestKey(day,playerId)),
+      this.get({pk:board==='hearts'?heartPartition(day):'DAY#'+day,sk:'META'})
+    ]);
+    if(!mine)return {day,total:meta?.count||0,mine:null};
+    const position=await this.countAhead(board,day,mine,board==='hearts'?1000:1001);
+    const rank=position>1000?'1,000+':position;
+    return {day,total:meta?.count||0,mine:{rank,rankExact:position<=1000,...(board==='hearts'?{hearts:mine.hearts,levels:mine.levels}:{elapsedMs:mine.elapsedMs,mistakes:mine.mistakes})}};
+  }
+  topRows(board,day){
+    const key=board+':'+day,cached=this.topCache.get(key);
+    if(cached&&cached.until>this.now())return cached.promise;
+    // Bounded, per-Lambda warm cache. Never cache player identity or own score.
+    if(this.topCache.size>=128)this.topCache.delete(this.topCache.keys().next().value);
+    const entry={until:this.now()+5000};
+    entry.promise=this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND begins_with(sk,:prefix)',ExpressionAttributeValues:{':day':board==='hearts'?heartPartition(day):'DAY#'+day,':prefix':board==='hearts'?'HEARTS#':'SCORE#'},Limit:50,ConsistentRead:true}).then(async result=>({...result,names:await this.playerNames((result.Items||[]).map(row=>row.playerId))})).catch(error=>{if(this.topCache.get(key)===entry)this.topCache.delete(key);throw error;});
+    this.topCache.set(key,entry);return entry.promise;
+  }
   async getPlacementReward(playerId,board,day){return (await this.get({pk:'PLAYER#'+playerId,sk:'PRIZE#'+board+':'+day}))?.receipt||null;}
   async savePlacementReward(playerId,receipt){
     try{
@@ -36,7 +71,7 @@ export class DynamoStore{
       {Put:{TableName:this.tableName,Item:{pk:'TOKEN#'+tokenHash,sk:'AUTH',playerId:player.id},ConditionExpression:'attribute_not_exists(pk)'}}
     ]});
   }
-  async rename(id,name){await this.send(UpdateCommand,{Key:playerKey(id),UpdateExpression:'SET #name=:name',ExpressionAttributeNames:{'#name':'name'},ExpressionAttributeValues:{':name':name},ConditionExpression:'attribute_exists(pk)'});}
+  async rename(id,name){await this.send(UpdateCommand,{Key:playerKey(id),UpdateExpression:'SET #name=:name',ExpressionAttributeNames:{'#name':'name'},ExpressionAttributeValues:{':name':name},ConditionExpression:'attribute_exists(pk)'});this.topCache.clear();}
   async limit(key,maximum,period,time){
     const result=await this.send(UpdateCommand,{Key:{pk:'LIMIT#'+key+'#'+Math.floor(time/period),sk:'LIMIT'},UpdateExpression:'SET expires=:expires ADD #count :one',ExpressionAttributeNames:{'#count':'count'},ExpressionAttributeValues:{':expires':Math.ceil((time+2*period)/1000),':one':1},ReturnValues:'UPDATED_NEW'});return result.Attributes.count;
   }
@@ -66,7 +101,7 @@ export class DynamoStore{
         if(previous)transact.push({Delete:{TableName:this.tableName,Key:{pk:'DAY#'+day,sk:previous.rankKey}}});
         else transact.push({Update:{TableName:this.tableName,Key:{pk:'DAY#'+day,sk:'META'},UpdateExpression:'SET expires=:expires ADD #count :one',ExpressionAttributeNames:{'#count':'count'},ExpressionAttributeValues:{':one':1,':expires':expiry(day)}}});
       }
-      try{await this.send(TransactWriteCommand,{TransactItems:transact});return finished;}
+      try{await this.send(TransactWriteCommand,{TransactItems:transact});this.topCache.delete('speed:'+day);return finished;}
       catch(error){if(!['TransactionCanceledException','TransactionConflictException'].includes(error.name))throw error;if(attempt===4)throw error;await new Promise(resolve=>setTimeout(resolve,20*(attempt+1)));}
     }
   }
@@ -87,40 +122,39 @@ export class DynamoStore{
       ];
       if(previous)transact.push({Delete:{TableName:this.tableName,Key:{pk:heartPartition(day),sk:previous.rankKey}}});
       else transact.push({Update:{TableName:this.tableName,Key:{pk:heartPartition(day),sk:'META'},UpdateExpression:'SET expires=:expires ADD #count :one',ExpressionAttributeNames:{'#count':'count'},ExpressionAttributeValues:{':one':1,':expires':expiry(day)}}});
-      try{await this.send(TransactWriteCommand,{TransactItems:transact});return {credited:true,hearts,level};}
+      try{await this.send(TransactWriteCommand,{TransactItems:transact});this.topCache.delete('hearts:'+day);return {credited:true,hearts,level};}
       catch(error){if(!['TransactionCanceledException','TransactionConflictException'].includes(error.name)||attempt===4)throw error;await new Promise(resolve=>setTimeout(resolve,20*(attempt+1)));}
     }
   }
   async heartsBoard(day,playerId){
     const [top,meta,mine]=await Promise.all([
-      this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND begins_with(sk,:prefix)',ExpressionAttributeValues:{':day':heartPartition(day),':prefix':'HEARTS#'},Limit:50,ConsistentRead:true}),
+      this.topRows('hearts',day),
       this.get({pk:heartPartition(day),sk:'META'}),playerId?this.get(heartPlayerKey(day,playerId)):null
     ]);
-    const rows=top.Items||[],ids=[...new Set([...rows.map(row=>row.playerId),...(mine?[mine.playerId]:[])])];
-    const names=await this.playerNames(ids);
+    const rows=top.Items||[],names=await this.boardNames(top,mine);
     const view=(row,rank)=>({rank,name:names.get(row.playerId)||'Firefly',tag:row.playerId.slice(0,4).toUpperCase(),hearts:row.hearts,levels:row.levels,isYou:row.playerId===playerId});
     let rank=1;
     const entries=rows.map((row,index)=>{if(index&&row.hearts!==rows[index-1].hearts)rank=index+1;return view(row,rank);});
-    let own=entries.find(entry=>entry.isYou)||null;
-    if(mine&&!own){
-      let count=0,cursor;
-      do{const page=await this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND sk BETWEEN :prefix AND :key',ExpressionAttributeValues:{':day':heartPartition(day),':prefix':'HEARTS#',':key':heartPrefix(mine.hearts)},Select:'COUNT',ConsistentRead:true,ExclusiveStartKey:cursor});count+=page.Count;cursor=page.LastEvaluatedKey;}while(cursor);
-      own=view(mine,count+1);
-    }
+    // The cached public list can lag other Lambda instances by five seconds.
+    // Always derive the personal rank from the current stored score.
+    const position=mine?await this.countAhead('hearts',day,mine,1000):0;
+    const own=mine?{...view(mine,position>1000?'1,000+':position),rankExact:position<=1000}:null;
     return {day,total:meta?.count||0,entries,mine:own};
-  }
-  async rank(day,key){
-    let count=0,cursor;do{const page=await this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND sk BETWEEN :prefix AND :key',ExpressionAttributeValues:{':day':'DAY#'+day,':prefix':'SCORE#',':key':key},Select:'COUNT',ConsistentRead:true,ExclusiveStartKey:cursor});count+=page.Count;cursor=page.LastEvaluatedKey;}while(cursor);return count;
   }
   async board(day,playerId){
     const [top,meta,mine]=await Promise.all([
-      this.send(QueryCommand,{KeyConditionExpression:'pk=:day AND begins_with(sk,:prefix)',ExpressionAttributeValues:{':day':'DAY#'+day,':prefix':'SCORE#'},Limit:50,ConsistentRead:true}),
+      this.topRows('speed',day),
       this.get({pk:'DAY#'+day,sk:'META'}),playerId?this.get(bestKey(day,playerId)):null
     ]);
-    const rows=top.Items||[],ids=[...new Set([...rows.map(row=>row.playerId),...(mine?[mine.playerId]:[])])],names=await this.playerNames(ids);
+    const rows=top.Items||[],names=await this.boardNames(top,mine);
     const view=(row,rank)=>({rank,name:names.get(row.playerId)||'Firefly',tag:row.playerId.slice(0,4).toUpperCase(),elapsedMs:row.elapsedMs,mistakes:row.mistakes,isYou:row.playerId===playerId});
-    const position=mine?(rows.findIndex(row=>row.playerId===playerId)+1||await this.rank(day,mine.rankKey)):0;
-    return {day,total:meta?.count||0,entries:rows.map((row,index)=>view(row,index+1)),mine:mine?view(mine,position):null};
+    const position=mine?await this.countAhead('speed',day,mine,1001):0;
+    return {day,total:meta?.count||0,entries:rows.map((row,index)=>view(row,index+1)),mine:mine?{...view(mine,position>1000?'1,000+':position),rankExact:position<=1000}:null};
+  }
+  async boardNames(top,mine){
+    const names=new Map(top.names);
+    if(mine&&!names.has(mine.playerId))names.set(mine.playerId,(await this.get(playerKey(mine.playerId)))?.name||'Firefly');
+    return names;
   }
   async playerNames(ids){
     const names=new Map();
