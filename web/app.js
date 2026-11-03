@@ -1,5 +1,5 @@
 import {createMotion} from './motion.js';
-import {createFireflyPlayer,FOUND_DURATION} from './firefly-player.js';
+import {createFireflyPlayer} from './firefly-player.js';
 import {cloudBridge} from './cloud-bridge.js';
 import {rewardBridge} from './reward-bridge.js';
 import {cloudManager} from './cloud.js';
@@ -88,7 +88,7 @@ function finishHint(){
   document.body.classList.remove('hint-preview-open');modal.classList.remove('hint-overlay');
   modal.removeAttribute('aria-labelledby');modal.removeAttribute('aria-describedby');
   if(hint.game===game&&isPlaying&&!reducedMotion.matches)for(const i of hint.foundCells)playFound($('board').children[i]);
-  if(hint.onContinue){if(hint.foundCells.length&&!reducedMotion.matches)setTimeout(hint.onContinue,FOUND_DURATION+40);else hint.onContinue();}
+  if(hint.onContinue)hint.onContinue();
 }
 function showHint(hint,kind){
   dialog('hintDetails');finishCellMotion();
@@ -353,7 +353,7 @@ function win(){
   state.completed++;state.level++;let reward=false;
   if(state.completed%CARE_PACKAGE_LEVELS===0){state.hints+=2;state.reveals++;reward=true;}
   save();render();void cloud?.flush();
-  // Let the last firefly finish arriving before covering the board.
+  // Show the summary in the completion event, before the board can repaint.
   const showCompletion=()=>{
     if(!isPlaying||busy||game!==completedGame)return;
     dialog('journeyWin',{details:`Every firefly found its home. Level ${game.level} complete in ${$("time").textContent}, with ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}.`,next:`Wander to level ${state.level} →`});
@@ -361,13 +361,13 @@ function win(){
     $('journey-hearts-board').onclick=()=>showHeartsLeaderboard(completedGame.heartCompletion?.body.day);
     $('next-level').onclick=()=>{close();newLevel();};
   };
-  if(activeHint)activeHint.onContinue=showCompletion;else setTimeout(showCompletion,reducedMotion.matches?0:FOUND_DURATION+40);
+  if(activeHint)activeHint.onContinue=showCompletion;else showCompletion();
 }
 function winDaily(){
   const result=recordDailyResult(state.dailyRecords,game);if(!result)return;
   save();render();const completedGame=game;
   if(completedGame.online)submitRace(completedGame);
-  setTimeout(()=>{
+  const showCompletion=()=>{
     if(!isPlaying||busy||game!==completedGame)return;
     dialog('dailyWin',{title:result.improved?"A new personal best!":"Daily complete.",time:formatSpeed(game.elapsedMs),details:`${game.dailyDay} · ${game.mistakes} ${game.mistakes===1?"mistake":"mistakes"}`,best:formatSpeed(result.bestMs)});
     $('daily-again').onclick=()=>{close();newDailyRun(completedGame.dailyDay);};
@@ -375,7 +375,8 @@ function winDaily(){
     const status=document.createElement('p');status.id='race-status';status.setAttribute('aria-live','polite');$('daily-again').before(status);
     const retry=document.createElement('button');retry.id='race-submit';retry.className='secondary';retry.textContent='Retry score upload';retry.onclick=()=>submitRace(completedGame);$('daily-again').before(retry);
     const board=document.createElement('button');board.className='secondary';board.textContent='Leaderboard';board.onclick=()=>showLeaderboard(completedGame.dailyDay);$('daily-again').before(board);updateRaceStatus(completedGame);
-  },reducedMotion.matches?0:FOUND_DURATION+40);
+  };
+  showCompletion();
 }
 function showLoss(){
   if(mode==='daily'){

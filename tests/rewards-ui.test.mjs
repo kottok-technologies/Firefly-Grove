@@ -21,6 +21,8 @@ test('care packages skip completion five, award at ten, and keep existing invent
       assert.match($('milestone-text').textContent,new RegExp('^'+(10-completed)+' more'));
       $('care-package').click();assert.match($('modal-content').textContent,/Every ten completed levels/);$('close-modal').click();
       $('play').click();$('board').children[targets.at(-1)].dispatchEvent(new window.MouseEvent('click',{bubbles:true,detail:0,shiftKey:true}));
+      assert.equal($('modal').open,true,'the summary opens in the final find event without an animation timeout');
+      assert.ok($('next-level'),'the level summary is already available before timers run');
       await new Promise(resolve=>setTimeout(resolve,5));
       const reward=completed===9;
       assert.equal(saved().completed,completed+1);assert.equal(saved().hints,reward?5:3);assert.equal(saved().reveals,reward?3:2);
