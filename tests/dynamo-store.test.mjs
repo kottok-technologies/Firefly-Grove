@@ -18,6 +18,11 @@ test('DynamoDB transactions preserve one best score through retries and concurre
     const player={id:randomUUID(),name:'Amber',tokenHash:hash('test-token'),createdAt:1};await store.createPlayer(player);
     assert.equal((await store.playerByToken(player.tokenHash)).name,'Amber');assert.equal(await store.playerByToken('missing'),null);
     await store.rename(player.id,'Birch');assert.equal((await store.playerByToken(player.tokenHash)).name,'Birch');
+    assert.equal(await store.getPlacementReward(player.id,'speed',day),null);
+    const prize={id:'speed:'+day,board:'speed',day,rank:1,hints:5,reveals:3};
+    const claims=await Promise.all([store.savePlacementReward(player.id,prize),store.savePlacementReward(player.id,{...prize,hints:999})]);
+    assert.deepEqual(claims[0],claims[1]);
+    assert.deepEqual(await store.getPlacementReward(player.id,'speed',day),claims[0]);
     assert.equal(await store.limit('test',2,60000,1000),1);assert.equal(await store.limit('test',2,60000,1000),2);
     const makeRun=()=>({id:randomUUID(),playerId:player.id,day,version:'speed-v1',status:'active',startedAt:1000});
     const finish=(run,elapsedMs,mistakes=0)=>({...run,status:'finished',finishedAt:1000+elapsedMs,elapsedMs,mistakes});

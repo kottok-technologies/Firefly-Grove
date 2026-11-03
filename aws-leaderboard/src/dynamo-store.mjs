@@ -16,6 +16,18 @@ export class DynamoStore{
   constructor(tableName,client=DynamoDBDocumentClient.from(new DynamoDBClient({}),{marshallOptions:{removeUndefinedValues:true}})){this.tableName=tableName;this.client=client;}
   send(Command,input){return this.client.send(new Command({TableName:this.tableName,...input}));}
   async get(Key){return (await this.send(GetCommand,{Key,ConsistentRead:true})).Item||null;}
+  async getPlacementReward(playerId,board,day){return (await this.get({pk:'PLAYER#'+playerId,sk:'PRIZE#'+board+':'+day}))?.receipt||null;}
+  async savePlacementReward(playerId,receipt){
+    try{
+      await this.send(UpdateCommand,{Key:{pk:'PLAYER#'+playerId,sk:'PRIZE#'+receipt.id},UpdateExpression:'SET receipt=:receipt',ExpressionAttributeValues:{':receipt':receipt},ConditionExpression:'attribute_not_exists(pk)'});
+      return receipt;
+    }catch(error){
+      if(error.name!=='ConditionalCheckFailedException')throw error;
+      const saved=await this.getPlacementReward(playerId,receipt.board,receipt.day);
+      if(!saved)throw error;
+      return saved;
+    }
+  }
   async playerByToken(tokenHash){const auth=await this.get({pk:'TOKEN#'+tokenHash,sk:'AUTH'});return auth?this.get(playerKey(auth.playerId)):null;}
   async createPlayer(player){
     const {tokenHash,...profile}=player;

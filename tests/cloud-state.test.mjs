@@ -10,8 +10,12 @@ test('private snapshots preserve progression and profile credentials without tes
   const state=stateFixture();state.dailyRun=createDailyGame('2026-10-28');state.dailyRun.online={runId:'stay-on-original-device'};state.dailyRun.rankedFinds=[];
   state.dailyRecords['2026-10-28']={bestMs:1234,lastMs:2345,finishes:2};state.previousPuzzle={size:14};state.notForCloud='private debug data';
   state.leaderboardProfile=state.leaderboardProfiles[origin];state.journeyHearts.pending.push({owner:'test',body:{}});
+  const prizeKey=origin+'|'+state.leaderboardProfiles[origin].id+'|speed:2026-10-27';
+  state.placementReceipts={[prizeKey]:true,'test|other|hearts:2026-10-27':true};
   const selected=cloudState(state,origin),{text}=encodeCloudSave(selected,{id:'snapshot-1',savedAt:'2026-10-28T00:00:00Z'}),save=parseCloudSave(text);
   assert.deepEqual(save.state,selected);assert.equal(save.state.leaderboardProfiles[origin].token,'a'.repeat(64));
+  assert.deepEqual(save.state.placementReceipts,{[prizeKey]:true});
+  assert.throws(()=>parseCloudSave(text.replace('"'+prizeKey+'":true','"'+prizeKey+'":false')));
   assert.equal(save.state.leaderboardProfiles.test,undefined);assert.equal(save.state.leaderboardProfile,undefined);assert.equal(save.state.notForCloud,undefined);assert.equal(save.state.previousPuzzle,undefined);
   assert.equal(save.state.dailyRun.online,undefined);assert.equal(save.state.dailyRun.rankedFinds,undefined);assert.ok(state.dailyRun.online);
   assert.equal(save.state.journeyHearts.pending.length,1);assert.equal(save.state.journeyHearts.lastLevel.test,undefined);

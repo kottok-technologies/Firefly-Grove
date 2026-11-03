@@ -21,6 +21,9 @@ function fixture(){
     async finishRun(run){const previous=runs.get(run.id);if(previous.status==='finished')return previous;runs.set(run.id,{...run});const key=run.day+run.playerId,best=scores.get(key);if(!best||run.elapsedMs<best.elapsedMs||(run.elapsedMs===best.elapsedMs&&run.mistakes<best.mistakes))scores.set(key,run);return run;},
     async board(date,id){const ranked=[...scores.values()].filter(row=>row.day===date).sort((a,b)=>a.elapsedMs-b.elapsedMs||a.mistakes-b.mistakes||a.finishedAt-b.finishedAt||a.playerId.localeCompare(b.playerId)).map((row,index)=>({rank:index+1,name:players.get(row.playerId).name,tag:row.playerId.slice(0,4).toUpperCase(),elapsedMs:row.elapsedMs,mistakes:row.mistakes,isYou:row.playerId===id}));return {day:date,total:ranked.length,entries:ranked.slice(0,50),mine:ranked.find(row=>row.isYou)||null};}
   };
+  const prizes=new Map();
+  store.getPlacementReward=async(id,board,date)=>prizes.get(id+board+date)||null;
+  store.savePlacementReward=async(id,receipt)=>{const key=id+receipt.board+receipt.day;if(!prizes.has(key))prizes.set(key,receipt);return prizes.get(key);};
   const handler=createHandler(store,{now:()=>now});
   return {store,advance(ms){now+=ms;},async call(path,{body,player,method=body?'POST':'GET',headers={},...event}={}){
     const url=new URL('https://test.invalid/api/v1/'+path),response=await handler({rawPath:url.pathname,queryStringParameters:Object.fromEntries(url.searchParams),requestContext:{http:{method,sourceIp:'192.0.2.1'}},headers:{...(body?{'content-type':'application/json'}:{}),...(player?{authorization:'Bearer '+player.token}:{}),...headers},...(body?{body:JSON.stringify(body)}:{}),...event});return {...response,data:response.body?JSON.parse(response.body):null};
@@ -28,6 +31,29 @@ function fixture(){
 }
 async function register(f,name='Amber'){const result=await f.call('players',{body:{name}});assert.equal(result.statusCode,201);return result.data;}
 const start=(f,player)=>f.call('runs',{player,body:{day,version:'speed-v1'}});
+
+test('placement rewards enforce ownership, final standings, tiers and durable retry receipts',async()=>{
+  const f=fixture(),a=await register(f),b=await register(f,'Birch');
+  const claim=(player,board='hearts',date=day)=>f.call('rewards/claim',{player,body:{board,day:date,rank:1,hints:999}});
+  assert.equal((await claim(null)).statusCode,401);
+  for(const [board,date] of [['bad',day],['hearts','bad'],['speed','2026-02-30'],['hearts',null]])assert.equal((await claim(a,board,date)).statusCode,400);
+  assert.equal((await claim(a)).statusCode,409);
+  await f.call('journey/finish',{player:a,body:journey()});
+  const run=(await start(f,a)).data;f.advance(10000);await f.call('finish',{player:a,body:{runId:run.id,finds}});
+  f.advance(12*3600000);
+  let reward=await claim(a);assert.equal(reward.statusCode,200);assert.equal(reward.data.hints,5);assert.equal(reward.data.reveals,3);
+  assert.deepEqual((await claim(a)).data,reward.data);
+  assert.equal((await claim(b)).statusCode,409);
+  assert.equal((await claim(a,'speed')).statusCode,409);
+  f.advance(36*3600000);
+  reward=await claim(a,'speed');assert.equal(reward.statusCode,200);assert.equal(reward.data.id,'speed:'+day);
+  f.store.heartsBoard=async()=>({mine:{rank:3}});assert.equal((await claim(b)).data.hints,3);
+  const c=await register(f,'Cricket');f.store.heartsBoard=async()=>({mine:{rank:10}});assert.equal((await claim(c)).data.hints,1);
+  const d=await register(f,'Dapple');f.store.heartsBoard=async()=>({mine:{rank:11}});assert.equal((await claim(d)).statusCode,409);
+  f.advance(91*86400000);
+  assert.equal((await claim(d)).statusCode,410);
+  assert.equal((await claim(a)).statusCode,200,'existing receipts survive board expiry');
+});
 
 test('AWS API authenticates profiles, normalizes nicknames and supports renames',async()=>{
   const f=fixture(),player=await register(f,'  Little   Light ');assert.equal(player.name,'Little Light');assert.equal(player.token.length,64);assert.notEqual(hash(player.token),player.token);

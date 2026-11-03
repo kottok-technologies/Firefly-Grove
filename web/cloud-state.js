@@ -47,6 +47,9 @@ function validateState(state){
       if(!plain(entry)||typeof entry.owner!=='string'||!plain(body)||!['journey-v1','journey-v2','journey-v3'].includes(body.version)||!integer(body.level,1,1000000)||!integer(body.seed,0,0xffffffff)||!/^\d{4}-\d{2}-\d{2}$/.test(body.day)||!Array.isArray(body.finds)||body.finds.length>512||body.finds.some(i=>!integer(i,-1,99)))invalid();
     }
   }
+  if(state.placementReceipts!==undefined){
+    if(!plain(state.placementReceipts)||Object.entries(state.placementReceipts).some(([key,value])=>key.length>300||value!==true))invalid();
+  }
   return state;
 }
 // A single private save contains one complete progression, including the guest
@@ -58,6 +61,8 @@ export function cloudState(state,origin){
   selected.leaderboardProfiles={};
   if(/^https:\/\/[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com$/.test(origin)&&state.leaderboardProfiles?.[origin])selected.leaderboardProfiles[origin]=state.leaderboardProfiles[origin];
   const owner=origin+'|'+state.leaderboardProfiles?.[origin]?.localId;
+  const prizeOwner=origin+'|'+state.leaderboardProfiles?.[origin]?.id+'|';
+  selected.placementReceipts=Object.fromEntries(Object.entries(state.placementReceipts||{}).filter(([key])=>key.startsWith(prizeOwner)));
   selected.journeyHearts={pending:state.journeyHearts?.pending.filter(entry=>entry.owner===owner)||[],lastLevel:{}};
   if(state.journeyHearts?.lastLevel[owner]!==undefined)selected.journeyHearts.lastLevel[owner]=state.journeyHearts.lastLevel[owner];
   const result=clone(selected);

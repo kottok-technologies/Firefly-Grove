@@ -2,6 +2,7 @@ import {privacyDocument} from '../../web/privacy-policy.js';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {createDailyGame,dailyKey} from './daily.js';
 import {validateJourneyCompletion} from './journey.mjs';
+import {placementPrize,rewardClosesAt} from '../../web/placement-rewards.js';
 export class ApiError extends Error{constructor(status,message){super(message);this.status=status;}}
 export const hash=value=>createHash('sha256').update(value).digest('hex');
 export function normalizeName(name){
@@ -58,6 +59,19 @@ export function createHandler(store,{now=()=>Date.now()}={}){
         await store.createPlayer({id,name,tokenHash:hash(token),createdAt:time});return respond({...playerView({id,name}),token},201);
       }
       const player=await authenticate();
+      if(path==='/api/v1/rewards/claim'&&method==='POST'){
+        await limit('reward:'+player.id,60,60000);
+        const {board,day}=body();
+        if(!['speed','hearts'].includes(board)||typeof day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day+'T00:00:00Z'))||dailyKey(new Date(day+'T00:00:00Z'))!==day)throw new ApiError(400,'Choose a leaderboard and a valid UTC date.');
+        const receipt=await store.getPlacementReward(player.id,board,day);
+        if(receipt)return respond(receipt);
+        if(time<rewardClosesAt(day,board))throw new ApiError(409,'These standings are still open. Return after the reward unlocks.');
+        if(time>=Date.parse(day+'T00:00:00Z')+91*86400000)throw new ApiError(410,'The 90-day reward claim window has ended.');
+        const standings=board==='speed'?await store.board(day,player.id):await store.heartsBoard(day,player.id);
+        const rank=standings.mine?.rank,prize=placementPrize(rank);
+        if(!prize)throw new ApiError(409,'Only a top 10 placement earns a reward.');
+        return respond(await store.savePlacementReward(player.id,{id:board+':'+day,board,day,rank,hints:prize.hints,reveals:prize.reveals}));
+      }
       if(path==='/api/v1/journey/finish'&&method==='POST'){
         await limit('journey-finish:'+player.id,120,60000);
         const input=body();

@@ -7,6 +7,8 @@ import {parseDeviceBackup} from './cloud-state.js';
 import {hintFocus,renderHintBoard} from './hint-overlay.js';
 import {initializeHeartFinds,heartsManager} from './hearts.js';
 import {profileManager} from './profile.js';
+import {placementRewards} from './placement-rewards.js';
+import {renderPlacementRewards} from './placement-ui.js';
 import {renderDialog} from './dialogs.js';
 import {raceApi,LEADERBOARD_ORIGIN} from './leaderboard-client.js';
 import { createGame, applyMove, findHint, isTarget, levelConfig } from './engine.js';
@@ -34,6 +36,11 @@ state.leaderboardProfiles ||= {};
 const profiles=profileManager({profiles:state.leaderboardProfiles,origin:LEADERBOARD_ORIGIN,api:raceApi,persist:()=>save()});
 state.leaderboardProfile=profiles.profile;
 const hearts=heartsManager({state,origin:LEADERBOARD_ORIGIN,profile:profiles.profile,ensureOnline:profiles.ensureOnline,api:raceApi,persist:()=>save()});
+const prizes=placementRewards({state,origin:LEADERBOARD_ORIGIN,profile:profiles.profile,api:raceApi,persist:()=>{
+  if(restoringCloud)throw Error('Your save is changing. Please reopen rewards after restoring.');
+  if(mode==='daily')state.dailyRun=game;else state.game=game;
+  localStorage.setItem(STORAGE,JSON.stringify(state));try{cloud?.changed();}catch{}
+}});
 const puzzleKey = puzzle => puzzle.size + ':' + puzzle.regions.map(r=>r.toString(36)).join('');
 let game=state.game, busy=false, tick=Date.now(), pendingTap=null, worker=null, isPlaying=false;
 let renderedGame=null, idleTimer=null;
@@ -517,6 +524,7 @@ if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWor
 
 async function showLeaderboard(day=dailyKey()){
   dialog('leaderboard');
+  addPlacementLink(day);
   $('ranking-day').value=day;$('ranking-day').max=dailyKey();$('ranking-day').min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
   $('ranking-day').onchange=()=>showLeaderboard($('ranking-day').value);$('ranking-refresh').onclick=()=>showLeaderboard(day);
   const pending=state.dailyRun;
@@ -540,6 +548,20 @@ async function submitRace(run){
   finally{submittingRaces.delete(run);delete run.online.sending;try{if(!restoringCloud){localStorage.setItem(STORAGE,JSON.stringify(state));cloud?.changed();}}catch{}updateRaceStatus(run);}
 }
 const rankingButton=document.createElement('button');rankingButton.id='leaderboard';rankingButton.className='secondary leaderboard-button';rankingButton.textContent='Speed leaderboard ◷';rankingButton.onclick=()=>showLeaderboard();$('daily-best').before(rankingButton);
+const prizeButton=document.createElement('button');prizeButton.id='placement-rewards';prizeButton.className='secondary';prizeButton.textContent='Leaderboard rewards ♕';prizeButton.onclick=()=>showPlacementRewards();$('hearts-leaderboard').after(prizeButton);
+async function showPlacementRewards(day=new Date(Date.now()-86400000).toISOString().slice(0,10)){
+  dialog('placementRewards');
+  const date=$('prize-day'),entries=$('prize-entries');date.value=day;date.max=dailyKey();date.min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+  date.onchange=()=>showPlacementRewards(date.value);$('prize-refresh').onclick=()=>showPlacementRewards(day);
+  try{
+    await profiles.ensureOnline();
+    if(!entries.isConnected)return;
+    await renderPlacementRewards({container:entries,day,api:raceApi,profile:profiles.profile,rewards:prizes,onAdded:()=>{renderHome();$('hints').textContent=state.hints;$('reveals').textContent=state.reveals;}});
+  }catch(error){if(entries.isConnected)entries.textContent=error.message;}
+}
+function addPlacementLink(day){
+  const button=document.createElement('button');button.className='secondary';button.textContent='Placement rewards for this date';button.onclick=()=>showPlacementRewards(day);$('modal-content').append(button);
+}
 
 if(LEADERBOARD_ORIGIN)profiles.ensureOnline().then(()=>hearts.flush()).catch(()=>{});
 window.addEventListener('online',()=>{if(LEADERBOARD_ORIGIN)profiles.ensureOnline().catch(()=>{});});
@@ -553,6 +575,7 @@ $('hearts-leaderboard').onclick=()=>showHeartsLeaderboard();
 async function showHeartsLeaderboard(day=dailyKey()){
   // The completed board keeps its Next level button behind the rankings.
   dialog('heartsLeaderboard');
+  addPlacementLink(day);
   $('hearts-day').value=day;$('hearts-day').max=dailyKey();$('hearts-day').min=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
   $('hearts-day').onchange=()=>showHeartsLeaderboard($('hearts-day').value);$('hearts-refresh').onclick=()=>showHeartsLeaderboard(day);
   const status=$('hearts-status'),list=$('hearts-entries');

@@ -37,6 +37,7 @@
       "scripts/github-deploy-api.mjs",
       "web/profile.js",
       "web/hearts.js",
+      "web/placement-rewards.js",
       "aws-leaderboard/src/journey.mjs",
       "aws-leaderboard/src/kid-client.mjs",
       "web/hint-overlay.js",
