@@ -23,7 +23,7 @@ test('private snapshots preserve progression and profile credentials without tes
   assert.deepEqual(cloudState({...state,journeyHearts:undefined,puzzleKeys:undefined,dailyRecords:undefined},null).journeyHearts,{pending:[],lastLevel:{}});
   assert.deepEqual(parseDeviceBackup(JSON.stringify(stateFixture()),origin),stateFixture());
   for(const text of ['bad','null','[]','{"__proto__":{}}'])assert.throws(()=>parseDeviceBackup(text,origin));
-  for(const generation of ['journey-v1','journey-v2','journey-v3']){
+  for(const generation of ['journey-v1','journey-v2','journey-v3','journey-v4']){
     const next=stateFixture();next.game=createGame(7,42,generation);next.journeyHearts.pending[0].body.version=generation;
     const saved=parseCloudSave(encodeCloudSave(cloudState(next,origin)).text);
     assert.equal(saved.state.game.generation,generation);assert.equal(saved.state.journeyHearts.pending[0].body.version,generation);

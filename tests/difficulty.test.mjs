@@ -37,8 +37,8 @@ test('post-training puzzles resist the singles chain and meet their measured rea
   }
   const classic=generateClassicPuzzle(10,42,2),grade=gradePuzzle(classic);
   assert.equal(grade.advancedSteps,0);assert.equal(grade.openingChain,10);assert.equal(colorSingles(classic),10);
-  assert.equal(createGame(6,42).generation,'journey-v1');assert.equal(createGame(7,42).generation,'journey-v3');
-  for(const level of [8,9,11,12,14,15,23,24,33]){
+  assert.equal(createGame(6,42).generation,'journey-v1');assert.equal(createGame(7,42).generation,'journey-v4');
+  for(const level of [13,14,15,23,24,33]){
     const game=createGame(level,42);assert.deepEqual(game.givens,[]);assert.ok(game.marks.every(mark=>mark===0));assert.equal(game.grade.openingChain,0);
   }
   assert.throws(()=>createGame(7,42,'future'),RangeError);
@@ -89,7 +89,7 @@ test('new-generation hearts replay on the server and survive a staggered deploym
     if(legacyServer)throw Object.assign(Error('Invalid journey puzzle.'),{status:400});
     return {credited:true,hearts:validateJourneyCompletion(body).hearts,mine:{rank:1,hearts:2},total:1};
   }});
-  const entry=manager.queue(game);assert.equal(entry.body.version,'journey-v3');
+  const entry=manager.queue(game);assert.equal(entry.body.version,'journey-v4');
   assert.equal(validateJourneyCompletion(entry.body).hearts,2);
   await manager.flush();assert.equal(entry.status,'pending');assert.equal(manager.pending().length,1);assert.match(entry.error,/updated server/);
   legacyServer=false;await manager.flush();assert.equal(entry.status,'synced');assert.equal(manager.pending().length,0);

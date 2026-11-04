@@ -1,5 +1,7 @@
 # Journey puzzle generation
 
+Current journey-v4 size bands and labels are documented in [Journey progression](JOURNEY_PROGRESSION.md). Easy, Medium and Hard use the underlying Gentle, Thoughtful and Challenging solving profiles below. Released journey-v1/v2/v3 boards retain their original schedules.
+
 The generator excludes single-cell colors from newly generated Thoughtful and Challenging journey boards. They have no starter fireflies and must require an explained deduction before the first placement. Gentle boards retain easier openings; training levels 1–6 retain their original layouts and givens. Existing saved puzzles keep their regions, notes, lives, solution and generation version. Restarting a saved puzzle keeps that puzzle.
 
 ## Solving profiles
@@ -27,12 +29,12 @@ Training and Gentle singleton counts are selected before retries: 85% one, 13% t
 
 A 3,000-board sample covered sizes 6–10, seeds 0–299 and both harder profiles. Every accepted board had no singleton colors and openingChain zero, with no generation failures. The sample took about 78 seconds in total on the development machine, with the slowest generation about 1.55 seconds while other checks were also running. Phone performance can differ; generation remains in a worker.
 
-Automated tests check the opening deduction on empty boards, verify its exclusions against the solution, independently try the original color-single shortcut, check the full logical grade, and verify connected regions, balanced sizes, determinism and uniqueness. Tests also assert no hidden/pre-marked starter fireflies on harder journey levels. Hashes pin released v1 and v2 layouts, and the daily race layout.
+Automated tests check the opening deduction on empty boards, verify its exclusions against the solution, independently try the original color-single shortcut, check the full logical grade, and verify connected regions, balanced sizes, determinism and uniqueness. Tests also assert no hidden/pre-marked starter fireflies on harder journey levels. Hashes pin released v1, v2 and v3 layouts, and the daily race layout.
 
 ## Online compatibility and rollout
 
-Training games and old saves without a generation field use journey-v1. Earlier graded games use journey-v2. New post-training games use journey-v3. Heart submissions carry this version so the server regenerates the exact original puzzle and replays its find history. The updated server accepts all three versions; no database/schema change is needed. Cloud snapshot validation accepts all three generations too.
+Training games and old saves without a generation field use journey-v1. Earlier graded games use journey-v2. New post-training games use journey-v4, with balanced size rotation and fixed difficulty bands. Heart submissions carry this version so the server regenerates the exact original puzzle and replays its find history. The updated server accepts all four versions; no database/schema change is needed. Cloud snapshot validation accepts all four generations too.
 
-Deploy the updated Lambda through the existing reviewed Terraform plan/apply workflow before distributing builds that generate journey-v3 puzzles. During a staggered rollout the app retains an unsupported v2/v3 submission for retry. Existing UTC submission expiry still applies, so update the server first. Existing profiles, credited hearts, tools and levels are preserved.
+Deploy the updated Lambda through the existing reviewed Terraform plan/apply workflow before distributing builds that generate journey-v4 puzzles. During a staggered rollout the app retains an unsupported v2/v3/v4 submission for retry. Existing UTC submission expiry still applies, so update the server first. Existing profiles, credited hearts, tools and levels are preserved.
 
 Daily speed races deliberately keep their classic speed-v1 layout for compatibility with current clients and active races. This change addresses journey levels. Google Play cloud activation remains dependent on its separate Console setup described in [Google Play cloud saves](GOOGLE_PLAY_CLOUD.md).

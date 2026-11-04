@@ -76,7 +76,7 @@ reducedMotion.addEventListener('change',()=>{
   finishCellMotion();
   scheduleIdle();
 });
-if(game&&!game.completed&&game.size!==levelConfig(game.level).size){
+if(game&&!game.completed&&game.size!==levelConfig(game.level,game.generation||'journey-v1').size){
   state.previousPuzzle=game;game=null;
   $('home-note').hidden=false;
   $('home-note').textContent='Your level will use the new smaller grid. Your tools and milestone progress are kept.';
@@ -123,7 +123,7 @@ function cancelDrag(){
   if(previous?.changed)save();
 }
 function renderHome(){
-  const config=levelConfig(state.level);
+  const config=state.game&&!state.game.completed?levelConfig(state.game.level,state.game.generation||'journey-v1'):levelConfig(state.level);
   const journey=state.game;
   $('play-label').textContent=journey&&!journey.completed?`Continue level ${journey.level}`:state.level===1?'Begin training':`Play level ${state.level}`;
   $('play-meta').textContent=`${config.size} × ${config.size} · ${config.givens===2?'Two starter fireflies':config.givens===1?'One starter firefly':config.label}`;
@@ -208,7 +208,7 @@ function render(){
   if(!game)return;
   const daily=mode==='daily';
   $('level-prefix').textContent=daily?'Daily':'Level';$('level').textContent=daily?'':game.level;
-  $('difficulty').textContent=daily?(game.online?'Ranked':'Practice'):levelConfig(game.level).label;
+  $('difficulty').textContent=daily?(game.online?'Ranked':'Practice'):levelConfig(game.level,game.generation||'journey-v1').label;
   $('chapter').textContent=daily?`${game.dailyDay} · UTC`:game.level<=6?'THE FIRST GLOW':'INTO THE GROVE';
   $('journey-tools').hidden=daily;$('daily-rules').hidden=!daily;
   $('hint').disabled=$('reveal').disabled=daily||busy||game.completed;

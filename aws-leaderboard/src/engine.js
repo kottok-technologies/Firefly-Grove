@@ -35,7 +35,17 @@ export function solve(regions, n, { limit = 2, fixed = [], excluded = [], budget
   }
   visit(0); return { solutions: results, nodes, exhausted };
 }
-export function levelConfig(level) {
+export function levelConfig(level,generation='journey-v4') {
+  if(generation==='journey-v4'){
+    if(level<=6)return {size:level<=3?4:5,givens:level<=3?2:1,label:'Training',difficulty:0};
+    const start=level<=12?7:level<=32?13:33;
+    const sizes=level<=12?[6,7]:level<=32?[7,8]:[8,9,10];
+    const offset=level-start,bag=Math.floor(offset/sizes.length);
+    // Complete shuffled bags keep all allowed sizes in regular rotation.
+    // Size is independent of retry seeds, so Home and server replay agree.
+    const order=shuffle(sizes,random((Math.imul(bag+1,0x9e3779b1)^start^0x37b8a941)>>>0));
+    return {size:order[offset%order.length],givens:0,label:level<=12?'Easy':level<=32?'Medium':'Hard',difficulty:level<=12?0:level<=32?1:2};
+  }
   const size=level<=3?4:level<=6?5:level<=9?6:level<=12?7:Math.min(10,8+Math.floor((level-13)/10));
   return { size, givens: level <= 3 ? 2 : level <= 6 ? 1 : 0, label: level <= 6 ? 'Training' : ['Gentle', 'Thoughtful', 'Challenging'][(level - 7) % 3] };
 }
@@ -221,9 +231,9 @@ export function generatePuzzle(n,seed,difficulty=0) {
   }
   throw new Error('Unable to generate a puzzle with a deduction-led opening.');
 }
-export function createGame(level, seed, generation = level<=6?'journey-v1':'journey-v3') {
-  const config = levelConfig(level), difficulty = (level - 7) % 3;
-  if(!['journey-v1','journey-v2','journey-v3'].includes(generation))throw new RangeError('Unsupported journey generation.');
+export function createGame(level, seed, generation = level<=6?'journey-v1':'journey-v4') {
+  const config = levelConfig(level,generation), difficulty = generation==='journey-v4'?config.difficulty:(level - 7) % 3;
+  if(!['journey-v1','journey-v2','journey-v3','journey-v4'].includes(generation))throw new RangeError('Unsupported journey generation.');
   const puzzle = generation==='journey-v1'?generateClassicPuzzle(config.size,seed,difficulty):generation==='journey-v2'?generateGradedPuzzle(config.size,seed,difficulty):generatePuzzle(config.size,seed,difficulty);
   const marks = Array(config.size ** 2).fill(0), rng = random(seed ^ 0xabc123);
   const givenRows = shuffle(Array.from({ length: config.size }, (_, i) => i), rng).slice(0, config.givens);

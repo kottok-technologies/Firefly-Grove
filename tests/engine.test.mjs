@@ -74,7 +74,7 @@ test('hints are truthful and training grows from 4x4 to a maximum of 10x10', () 
     const g=createGame(1,seed), hint=findHint(g); assert.ok(hint);
     hint.cells.forEach(i=> assert.equal(isTarget(g,i),hint.target));
   }
-  for(const [level,size]of[[1,4],[3,4],[4,5],[6,5],[7,6],[10,7],[13,8],[23,9],[33,10],[1000,10]])assert.equal(levelConfig(level).size,size);
+  for(const [level,size]of[[1,4],[3,4],[4,5],[6,5],[7,6],[10,7],[13,8],[23,9],[33,10],[1000,10]])assert.equal(levelConfig(level,'journey-v3').size,size);
   assert.equal(levelConfig(4).givens,1); assert.equal(levelConfig(7).givens,0);
   assert.throws(()=>generatePuzzle(14,42),RangeError);
   assert.throws(()=>generatePuzzle(3,42),RangeError);
