@@ -67,3 +67,22 @@ test('concurrent flushes drain new completions once and handle rejected and dupl
     assert.equal(item.status,status===400?'rejected':'expired');assert.equal(f.manager.pending().length,0);
   }
 });
+
+test('restored completion cards share their queued entry and update after retry',async()=>{
+  const f=fixture(),game=complete();f.state.game=game;game.heartCompletion=f.manager.queue(game);
+  const restored=JSON.parse(JSON.stringify(f.state));
+  assert.notEqual(restored.game.heartCompletion,restored.journeyHearts.pending[0]);
+  const manager=heartsManager({...f.options,state:restored});
+  assert.equal(restored.game.heartCompletion,restored.journeyHearts.pending[0]);
+  await manager.flush();assert.equal(manager.pending().length,0);
+  assert.equal(restored.game.heartCompletion.status,'synced');
+  assert.equal(restored.game.heartCompletion.result.mine.hearts,3);
+});
+
+test('profile connection failures are visible without discarding queued hearts',async()=>{
+  const f=fixture(),entry=f.manager.queue(complete());
+  const manager=heartsManager({...f.options,ensureOnline:async()=>{throw Error('Profile is offline');}});
+  await manager.flush();assert.equal(entry.error,'Profile is offline');
+  assert.equal(manager.pending().length,1);assert.equal(f.calls,0);
+  await f.manager.flush();assert.equal(entry.status,'synced');assert.equal(entry.error,undefined);
+});

@@ -356,7 +356,7 @@ function win(){
   if(mode==='daily'){winDaily();return;}
   const completedGame=game;
   game.heartCompletion=hearts.queue(game);
-  hearts.flush().then(()=>updateJourneyHeartStatus(completedGame));
+  void syncHearts();
   state.completed++;state.level++;let reward=false;
   if(state.completed%CARE_PACKAGE_LEVELS===0){state.hints+=2;state.reveals++;reward=true;}
   save();render();void cloud?.flush();
@@ -512,11 +512,11 @@ void cloud.initialize();
 $('settings').onclick=showSettings;
 $('cloud-attention').onclick=()=>{showSettings();cloud.showChoices();};
 document.addEventListener('firefly-pause',()=>{nativePaused=true;cancelTap();cancelDrag();save();tick=Date.now();stopIdle();finishCellMotion();if(!restoringCloud)void cloud.flush();});
-document.addEventListener('firefly-resume',()=>{nativePaused=false;tick=Date.now();updateTime();scheduleIdle();if(!restoringCloud)void cloud.flush();});
+document.addEventListener('firefly-resume',()=>{nativePaused=false;tick=Date.now();updateTime();scheduleIdle();if(!restoringCloud){void cloud.flush();void syncHearts();}});
 setInterval(()=>{const now=Date.now();if(mode==='journey'&&isPlaying&&!nativePaused&&game&&!busy&&!game.completed&&game.lives>0&&!document.hidden&&!modal.open){game.elapsed+=Math.min(2,Math.floor((now-tick)/1000));updateTime();if(game.elapsed%10===0)save();}tick=now;},1000);
 setInterval(()=>{if(mode==='daily'&&isPlaying&&game&&!busy&&!document.hidden)updateTime();},100);
 setInterval(()=>{if(!isPlaying)renderHome();},30000);
-document.addEventListener('visibilitychange',()=>{cancelTap();cancelDrag();save();tick=Date.now();if(document.hidden){stopIdle();finishCellMotion();if(!restoringCloud)void cloud.flush();}else{renderHome();updateTime();scheduleIdle();hearts.flush();}});
+document.addEventListener('visibilitychange',()=>{cancelTap();cancelDrag();save();tick=Date.now();if(document.hidden){stopIdle();finishCellMotion();if(!restoringCloud)void cloud.flush();}else{renderHome();updateTime();scheduleIdle();void syncHearts();}});
 render();save();
 if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
@@ -563,8 +563,16 @@ function addPlacementLink(day){
   const button=document.createElement('button');button.className='secondary';button.textContent='Placement rewards for this date';button.onclick=()=>showPlacementRewards(day);$('modal-content').append(button);
 }
 
-if(LEADERBOARD_ORIGIN)profiles.ensureOnline().then(()=>hearts.flush()).catch(()=>{});
-window.addEventListener('online',()=>{if(LEADERBOARD_ORIGIN)profiles.ensureOnline().catch(()=>{});});
+if(LEADERBOARD_ORIGIN){profiles.ensureOnline().catch(()=>{});void syncHearts();}
+window.addEventListener('online',()=>{if(LEADERBOARD_ORIGIN){profiles.ensureOnline().catch(()=>{});void syncHearts();}});
+async function syncHearts(){
+  if(restoringCloud)return;
+  await hearts.flush();
+  if(restoringCloud)return;
+  renderHome();
+  if(mode==='journey'&&game?.completed)updateJourneyHeartStatus(game);
+  if($('hearts-day'))await showHeartsLeaderboard($('hearts-day').value);
+}
 
 function updateJourneyHeartStatus(run){
   if(game!==run||!$('journey-heart-status'))return;
@@ -589,6 +597,9 @@ async function showHeartsLeaderboard(day=dailyKey()){
       who.textContent=`#${entry.rank}  ${entry.name} · ${entry.tag}${entry.isYou?' (you)':''}`;score.textContent=`${entry.hearts} ♥`;levels.textContent=`${entry.levels} ${entry.levels===1?'level':'levels'} completed`;
       row.append(who,score,levels);list.append(row);
     }
-    if(hearts.pending().length)status.textContent+=' · Some levels are still awaiting upload.';
+    if(hearts.pending().length){
+      const reason=hearts.pending().find(entry=>entry.error)?.error;
+      status.textContent+=' · '+hearts.pending().length+' levels awaiting upload.'+(reason?' '+reason:' Sync before 00:00 UTC.');
+    }
   }catch(error){if(status.isConnected)status.textContent=error.status===404?'Heart rankings are awaiting the server update.':error.message;}
 }

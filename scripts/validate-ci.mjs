@@ -9,6 +9,7 @@ for(const file of await readdir(new URL('.github/workflows/',root))){
   const doc=parseDocument(await read('.github/workflows/'+file));assert.equal(doc.errors.length,0,`${file}: invalid YAML`);
   const workflow=doc.toJS();
   if(file==='terraform-deploy.yml'){
+    assert.deepEqual(workflow.on.workflow_run.workflows,['CI','CodeQL'],'Plan retries when either required check completes; source checks still require both successes');
     assert.ok(workflow.on.workflow_run&&workflow.on.workflow_dispatch,`${file}: CI-completion and manual triggers required`);
     assert.equal(workflow.jobs.apply.environment,'production');
     assert.ok(workflow.jobs.apply.if.includes("github.event_name == 'workflow_dispatch'"),'Terraform apply must be manually requested');

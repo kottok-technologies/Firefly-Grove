@@ -18,6 +18,13 @@ export function initializeHeartFinds(game){
 export function heartsManager({state,origin,profile,ensureOnline,api,persist,now=()=>new Date()}){
   const ledger=state.journeyHearts ||= {pending:[],lastLevel:{}};
   const owner=String(origin)+'|'+profile.localId;
+  // JSON saves duplicate shared references. Reconnect the completion card to
+  // its queued entry so retries after restarting update the visible status.
+  const completion=state.game?.heartCompletion;
+  if(completion?.status==='pending'&&completion.body&&completion.owner===owner){
+    const queued=ledger.pending.find(entry=>entry.owner===owner&&['day','level','seed','version'].every(key=>entry.body[key]===completion.body[key]));
+    if(queued)state.game.heartCompletion=queued;
+  }
   let uploading=null;
   function queue(game){
     if(!game.completed||game.lives<1||!Array.isArray(game.heartFinds)||game.level<=(ledger.lastLevel[owner]||0))return null;
@@ -35,7 +42,10 @@ export function heartsManager({state,origin,profile,ensureOnline,api,persist,now
         }
       }
       if(!origin||!pending().length)return;
-      try{await ensureOnline();}catch{return;}
+      try{await ensureOnline();}catch(error){
+        for(const entry of pending())entry.error=error.message||'Cannot connect your player profile. Please retry.';
+        persist();return;
+      }
       while(pending().length){
         const entry=pending()[0];
         try{
