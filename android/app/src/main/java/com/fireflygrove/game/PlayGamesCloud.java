@@ -27,6 +27,8 @@ import java.util.concurrent.Executors;
 final class PlayGamesCloud {
     private static final String SLOT = "firefly-grove-progress-v1";
     private final Activity activity;
+    private final KidGate kid;
+    private boolean initialized;
     private final SharedPreferences preferences;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final boolean configured;
@@ -42,7 +44,8 @@ final class PlayGamesCloud {
         Session(SnapshotsClient.DataOrConflict<Snapshot> result, String accountId) { this.result = result; this.accountId = accountId; }
         Snapshot primary() { return result.isConflict() ? result.getConflict().getSnapshot() : result.getData(); }
     }
-    PlayGamesCloud(Activity activity, WebView web) {
+    PlayGamesCloud(Activity activity, WebView web, KidGate kid) {
+        this.kid = kid;
         this.activity = activity;
         preferences = activity.getSharedPreferences("firefly_cloud", Activity.MODE_PRIVATE);
         configured = ((FireflyApplication) activity.getApplication()).isPlayGamesConfigured();
@@ -81,6 +84,8 @@ final class PlayGamesCloud {
                 reply(proxy, id, status()); return;
             }
             if (!configured) { fail(proxy, id, "Google Play cloud saves are not configured for this build."); return; }
+            if (!kid.isPassed()) { fail(proxy, id, "Complete the age check before linking Google Play."); return; }
+            if (!initialized) { com.google.android.gms.games.PlayGamesSdk.initialize(activity.getApplication()); initialized = true; }
             if (busy) { fail(proxy, id, "A cloud save request is already running. Please wait."); return; }
             busy = true;
             if (operation.equals("read")) open(request.optBoolean("interactive"), proxy, id);
@@ -141,7 +146,7 @@ final class PlayGamesCloud {
                 }).addOnFailureListener(error -> requestFailed(requestEpoch, proxy, id));
         }).addOnFailureListener(error -> requestFailed(requestEpoch, proxy, id));
     }
-    private boolean current(int requestEpoch) { return !destroyed && requestEpoch == epoch; }
+    private boolean current(int requestEpoch) { return !destroyed && kid.isPassed() && requestEpoch == epoch; }
     private void requestFailed(int requestEpoch, JavaScriptReplyProxy proxy, String id) {
         if (!current(requestEpoch)) return;
         busy = false; discardSession();

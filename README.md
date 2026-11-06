@@ -114,3 +114,7 @@ The board and hint previews use a transparent PNG firefly with dark beetle wing 
 Settings offers optional Play Games Saved Games. Guest play remains available; automatic Play Games profile-creation prompts are suppressed. Explicit linking backs up the journey, tools, settings, daily bests, notes, and the current production player profile. Restoring keeps the same online player ID. Independent device/cloud changes require choosing one complete save, with no inventory or hearts merging. A local recovery copy is retained before replacement. Cloud upload can finish later while offline.
 
 The integration is disabled until the public Game Services project ID is configured and Saved Games and Android credentials are enabled in Play Console. See [setup, privacy, testing, and recovery](docs/GOOGLE_PLAY_CLOUD.md). No AWS schema or backend deployment is needed for this integration.
+
+## k-ID test integration
+
+Android now hosts the game behind the native k-ID all-in-one age gate, with saved session/challenge IDs and a Privacy & permissions screen. Server claims and current-permission checks are prepared but require secret setup and Terraform deployment. Add `com.fireflygrove.game` to the supplied Kai test key. See [setup and activation status](docs/KID_ANDROID.md); this is not yet production consent enforcement.

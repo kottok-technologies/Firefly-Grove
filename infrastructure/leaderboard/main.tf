@@ -71,6 +71,8 @@ resource "aws_iam_role_policy" "runtime" {
         Effect    = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = var.service_kms_key_arn
         Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${local.region}.amazonaws.com" } }
       },
+      { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = "arn:aws:secretsmanager:${local.region}:${local.account_id}:secret:${local.name}-kid-test-??????" },
+      { Effect = "Allow", Action = ["kms:Decrypt"], Resource = var.service_kms_key_arn, Condition = { StringEquals = { "kms:ViaService" = "secretsmanager.${local.region}.amazonaws.com" } } },
       # X-Ray ingestion does not support resource-level IAM restrictions.
       { Effect = "Allow", Action = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"], Resource = "*" }
     ]
@@ -91,7 +93,11 @@ resource "aws_lambda_function" "api" {
   memory_size = 2048
   timeout     = 12
   publish     = true
-  environment { variables = { TABLE_NAME = aws_dynamodb_table.scores.name } }
+  environment { variables = {
+    TABLE_NAME     = aws_dynamodb_table.scores.name
+    KID_SECRET_ARN = "${local.name}-kid-test"
+    KID_ENFORCE    = tostring(var.kid_enforce)
+  } }
   tracing_config { mode = "Active" }
   logging_config {
     log_format = "JSON"
@@ -110,7 +116,7 @@ resource "aws_apigatewayv2_api" "leaderboard" {
   protocol_type = "HTTP"
   cors_configuration {
     allow_origins = ["*"]
-    allow_headers = ["content-type", "authorization"]
+    allow_headers = ["content-type", "authorization", "x-firefly-consent"]
     allow_methods = ["GET", "POST", "PUT", "OPTIONS"]
     max_age       = 86400
   }

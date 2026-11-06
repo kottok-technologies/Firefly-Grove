@@ -1,3 +1,4 @@
+import {ConsentError} from './kid-core.mjs';
 import {privacyDocument} from '../../web/privacy-policy.js';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {createDailyGame,dailyKey} from './daily.js';
@@ -22,8 +23,8 @@ export function validateFinds(day,finds){
   if(found.size!==8)throw new ApiError(400,'The daily puzzle is not solved.');return mistakes;
 }
 const playerView=p=>({id:p.id,name:p.name,tag:p.id.slice(0,4).toUpperCase()});
-const headers={'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','access-control-allow-origin':'*','access-control-allow-methods':'GET, POST, PUT, OPTIONS','access-control-allow-headers':'Content-Type, Authorization'};
-export function createHandler(store,{now=()=>Date.now()}={}){
+const headers={'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','access-control-allow-origin':'*','access-control-allow-methods':'GET, POST, PUT, OPTIONS','access-control-allow-headers':'Content-Type, Authorization, X-Firefly-Consent'};
+export function createHandler(store,{now=()=>Date.now(),consent=null,enforceConsent=false}={}){
   return async event=>{
     const respond=(data,statusCode=200)=>({statusCode,headers,body:JSON.stringify(data)});
     try{
@@ -46,19 +47,39 @@ export function createHandler(store,{now=()=>Date.now()}={}){
         if(!player&&required)throw new ApiError(401,'Create a player profile to race online.');return player;
       };
       const ipHash=hash(event.requestContext?.http?.sourceIp||'unknown');
+      if(path.startsWith('/api/v1/consent/')&&method==='POST'){
+        if(!consent)throw new ConsentError(503,'k-ID server verification is not configured yet.');
+        await limit('consent:'+ipHash,30,60000);
+        if(path==='/api/v1/consent/claim')return respond(await consent.claim(event,body()));
+        if(path==='/api/v1/consent/session')return respond(await consent.signal(event));
+        if(path==='/api/v1/consent/delete')return respond(await consent.remove(event));
+        throw new ApiError(404,'Endpoint not found.');
+      }
+      const needsConsent=enforceConsent||!!(event.headers?.['x-firefly-consent']||event.headers?.['X-Firefly-Consent']);
+      const checkConsent=async(names,playerId)=>{
+        if(!needsConsent)return;
+        if(!consent)throw new ConsentError(503,'k-ID server verification is not configured yet.');
+        return consent.authorize(event,names,playerId);
+      };
+      const rankingPermissions=['leaderboard-and-rankings','public-profile'];
       if(['/api/v1/leaderboard','/api/v1/hearts'].includes(path)&&method==='GET'){
         const day=event.queryStringParameters?.day||today;
         if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day+'T00:00:00Z'))||dailyKey(new Date(day+'T00:00:00Z'))!==day||day>today||Date.parse(day+'T00:00:00Z')<Date.parse(today+'T00:00:00Z')-90*86400000)throw new ApiError(400,'Choose a UTC date within the last 90 days.');
         const player=await authenticate(false);
+        await checkConsent(rankingPermissions,player?.id);
         await limit('read:'+(player?.id||ipHash),180,60000);
         return respond(path==='/api/v1/hearts'?await store.heartsBoard(day,player?.id):await store.board(day,player?.id));
       }
       if(path==='/api/v1/players'&&method==='POST'){
         await limit('register:'+ipHash,10,3600000);
-        const name=normalizeName(body().name),id=randomUUID(),token=randomBytes(32).toString('hex');
-        await store.createPlayer({id,name,tokenHash:hash(token),createdAt:time});return respond({...playerView({id,name}),token},201);
+        const access=await checkConsent(rankingPermissions);
+        const input=body();
+        const custom=!needsConsent||access.session.permissions.some(p=>p.name==='custom-username'&&p.enabled===true&&['PLAYER','GUARDIAN'].includes(p.managedBy));
+        const name=custom?normalizeName(input.name):'Firefly'+randomBytes(4).toString('hex'),id=randomUUID(),token=randomBytes(32).toString('hex');
+        await store.createPlayer({id,name,tokenHash:hash(token),createdAt:time},access?.key);return respond({...playerView({id,name}),token},201);
       }
       const player=await authenticate();
+      await checkConsent(rankingPermissions,player.id);
       if(path==='/api/v1/rewards'&&method==='GET'||path==='/api/v1/rewards/claim'&&method==='POST'){
         await limit('reward:'+player.id,60,60000);
         const {board,day}=method==='GET'?event.queryStringParameters||{}:body();
@@ -87,6 +108,7 @@ export function createHandler(store,{now=()=>Date.now()}={}){
       }
       if(path==='/api/v1/profile'&&method==='GET')return respond(playerView(player));
       if(path==='/api/v1/profile'&&method==='PUT'){
+        await checkConsent(['custom-username'],player.id);
         await limit('rename:'+player.id,10,3600000);const name=normalizeName(body().name);await store.rename(player.id,name);return respond(playerView({...player,name}));
       }
       if(path==='/api/v1/runs'&&method==='POST'){
@@ -110,7 +132,7 @@ export function createHandler(store,{now=()=>Date.now()}={}){
       }
       throw new ApiError(404,'Endpoint not found.');
     }catch(error){
-      if(error instanceof ApiError)return respond({error:error.message},error.status);
+      if(error instanceof ApiError||error instanceof ConsentError)return respond({error:error.message},error.status);
       console.error('Leaderboard request failed',{name:error.name});return respond({error:'The leaderboard is temporarily unavailable. Please retry.'},503);
     }
   };

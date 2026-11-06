@@ -64,11 +64,12 @@ export class DynamoStore{
     }
   }
   async playerByToken(tokenHash){const auth=await this.get({pk:'TOKEN#'+tokenHash,sk:'AUTH'});return auth?this.get(playerKey(auth.playerId)):null;}
-  async createPlayer(player){
+  async createPlayer(player,consentKey){
     const {tokenHash,...profile}=player;
     await this.send(TransactWriteCommand,{TransactItems:[
       {Put:{TableName:this.tableName,Item:{...playerKey(player.id),...profile},ConditionExpression:'attribute_not_exists(pk)'}},
-      {Put:{TableName:this.tableName,Item:{pk:'TOKEN#'+tokenHash,sk:'AUTH',playerId:player.id},ConditionExpression:'attribute_not_exists(pk)'}}
+      {Put:{TableName:this.tableName,Item:{pk:'TOKEN#'+tokenHash,sk:'AUTH',playerId:player.id},ConditionExpression:'attribute_not_exists(pk)'}},
+      ...(consentKey?[{Update:{TableName:this.tableName,Key:{pk:'CONSENT#'+consentKey,sk:'AUTH'},UpdateExpression:'SET playerId=:player',ConditionExpression:'attribute_exists(pk) AND attribute_not_exists(playerId)',ExpressionAttributeValues:{':player':player.id}}}]:[])
     ]});
   }
   async rename(id,name){await this.send(UpdateCommand,{Key:playerKey(id),UpdateExpression:'SET #name=:name',ExpressionAttributeNames:{'#name':'name'},ExpressionAttributeValues:{':name':name},ConditionExpression:'attribute_exists(pk)'});this.topCache.clear();}

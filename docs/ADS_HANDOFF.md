@@ -39,6 +39,9 @@ Performed using Google test inventory and the corrected APK:
 
 ## k-ID progress and blocker
 
+- November 6 follow-up: user supplied a public Core test key and authorized the all-in-one native gate and server claim flow. These are now implemented in source with permission settings and Terraform-managed test-secret storage. Read `docs/KID_ANDROID.md` for current status: secret value, deployment, Kai allowlisting and sandbox/device validation are still pending; production/global enforcement and ad rollout are not activated. Earlier bullets below are historical.
+
+
 - November 6: user resumed SDK installation only and approved Android 12+ support. Added `com.k-id:core-ui:1.0.0`; native consent UI, initialization, permission enforcement and ad rollout remain pending. See `docs/PARENTAL_CONSENT.md` for Core SDK/Kai setup requirements.
 
 - User selected **verified parental consent for children's online features**, rather than making children permanently local-only, and selected **k-ID** as the provider. Do not replace this decision with an adult-only design without discussing it.

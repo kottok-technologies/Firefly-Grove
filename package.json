@@ -45,7 +45,11 @@
       "web/cloud.js",
       "web/cloud-state.js",
       "web/cloud-bridge.js",
-      "web/reward-bridge.js"
+      "web/reward-bridge.js",
+      "aws-leaderboard/src/kid-core.mjs",
+      "aws-leaderboard/src/kid-consent.mjs",
+      "aws-leaderboard/src/consent-store.mjs",
+      "web/kid-bridge.js"
     ],
     "reporter": [
       "text",

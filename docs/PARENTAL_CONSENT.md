@@ -4,6 +4,9 @@ The developer selected k-ID on October 30, 2026 to allow children's online featu
 
 ## Current status
 
+**November 6 Core SDK update:** the native all-in-one gate, saved-session handling, permission settings, Kai claim backend and Terraform secret-storage changes are implemented in source. They are not deployed or provider-tested. See [Android Core integration](KID_ANDROID.md) for the authoritative current setup and remaining activation work. The hosted CDK notes below describe the earlier preparatory architecture.
+
+
 The isolated server adapter in `aws-leaderboard/src/kid-client.mjs` implements authenticated k-ID calls for hosted end-to-end flow creation, widget status and current session permissions. It also provides raw-body HMAC authentication for webhook requests and a feature-permission predicate. Automated tests cover forged URLs, session mismatch, unknown states, Safe Start-style restricted permissions, malformed provider responses, signature tampering and expired timestamps.
 
 **This is preparatory code, not an active parental-consent flow.** It is not imported by the production handler. No new routes, consent records, SDK gating or parent UI have been deployed. Existing online behavior has not been changed by adding this module. No verification service has been provisioned or paid for, and no k-ID credentials have been stored. Do not ship an all-ages release on the assumption that parental consent is already enforced.
@@ -12,7 +15,7 @@ The isolated server adapter in `aws-leaderboard/src/kid-client.mjs` implements a
 
 The Android app includes `com.k-id:core-ui:1.0.0` from Maven Central, including its transitive core library. The developer approved raising `minSdk` from 26 to 31: new builds require Android 12 or newer. Compile/target SDK remain 36; app version and versionCode are unchanged.
 
-This installs the SDK only. No SDK provider, age gate, permission settings or initialization has been wired into the game. Consent enforcement and ad rollout remain pending. The new Core SDK uses Kai publishable keys and claim/session APIs; the older isolated hosted CDK server adapter must not be assumed compatible. Confirm the chosen product and backend claim validation before wiring it in.
+The initial dependency-only installation has now been extended by the implementation in [KID_ANDROID.md](KID_ANDROID.md). Deployment, full production enforcement and ad rollout remain pending. The new Core SDK uses Kai publishable keys and claim/session APIs; the older isolated hosted CDK server adapter must not be assumed compatible. Confirm the chosen product and backend claim validation before wiring it in.
 
 Next SDK setup needs a test publishable key configured in Kai for `com.fireflygrove.game`, exact feature permission mappings, and Kotlin/Compose integration for the age gate and permission settings. Live setup additionally requires registering the shipped signing certificate SHA-256. Secret server API keys must remain server-only.
 

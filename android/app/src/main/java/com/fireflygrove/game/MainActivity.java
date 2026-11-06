@@ -1,7 +1,6 @@
 package com.fireflygrove.game;
 
 import android.app.Activity;
-import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Build;
 import android.net.Uri;
@@ -10,8 +9,6 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
-import android.window.OnBackInvokedCallback;
-import android.window.OnBackInvokedDispatcher;
 import android.webkit.ServiceWorkerClient;
 import android.webkit.ServiceWorkerController;
 import android.webkit.WebResourceRequest;
@@ -27,12 +24,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** Offline shell: every game asset comes from the packaged web directory. */
-public final class MainActivity extends Activity {
+public final class MainActivity extends androidx.activity.ComponentActivity {
     private static final String APP_URL = "https://appassets.androidplatform.net/assets/index.html";
     private WebView web;
+    private FrameLayout gameRoot;
+    private KidGate kid;
     private PlayGamesCloud cloud;
     private RewardAds ads;
-    private OnBackInvokedCallback backCallback;
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         // A visible game window keeps the display awake without a wake lock or
@@ -43,6 +41,15 @@ public final class MainActivity extends Activity {
             attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
             getWindow().setAttributes(attributes);
         }
+        kid = new KidGate(this);
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() { handleBack(); }
+        });
+        kid.install(this::createGameView);
+        enterFullscreen();
+    }
+    private View createGameView() {
+        if (gameRoot != null) return gameRoot;
         WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this)).build();
         web = new WebView(this);
@@ -59,7 +66,8 @@ public final class MainActivity extends Activity {
         web.getSettings().setSupportMultipleWindows(false);
         web.getSettings().setGeolocationEnabled(false);
         web.getSettings().setMediaPlaybackRequiresUserGesture(true);
-        cloud = new PlayGamesCloud(this, web);
+        kid.attach(web);
+        cloud = new PlayGamesCloud(this, web, kid);
         ads = new RewardAds(this, web);
         web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) { return intercept(loader, request); }
@@ -83,15 +91,11 @@ public final class MainActivity extends Activity {
                 insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
             return insets.consumeSystemWindowInsets();
         });
-        setContentView(root);
+        gameRoot = root;
         enterFullscreen();
-        if (Build.VERSION.SDK_INT >= 33) {
-            backCallback = this::handleBack;
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
-        }
         web.loadUrl(APP_URL);
         ads.start();
+        return root;
     }
     private static boolean isPackagedAsset(Uri uri) {
         return WebSecurityPolicy.isPackagedAsset(uri.toString());
@@ -121,7 +125,7 @@ public final class MainActivity extends Activity {
         return new WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden", headers,
             new ByteArrayInputStream("Blocked by the packaged app policy.".getBytes(StandardCharsets.UTF_8)));
     }
-    @Override protected void onPause() { ads.pause(); web.evaluateJavascript("document.dispatchEvent(new Event('firefly-pause'))", null); web.onPause(); super.onPause(); }
+    @Override protected void onPause() { if (ads != null) ads.pause(); if (web != null) { web.evaluateJavascript("document.dispatchEvent(new Event('firefly-pause'))", null); web.onPause(); } super.onPause(); }
     @Override protected void onResume() {
         super.onResume();
         if (web != null) { web.onResume(); web.evaluateJavascript("document.dispatchEvent(new Event('firefly-resume'))", null); }
@@ -146,16 +150,8 @@ public final class MainActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         }
     }
-    private void handleBack() { web.evaluateJavascript("document.getElementById('modal').open ? (document.getElementById('close-modal').click(),true) : (window.returnToLanding ? window.returnToLanding() : false)", result -> { if (!"true".equals(result)) finish(); }); }
-    // Only pre-Android-13 devices use this entry point. Newer devices use the
-    // OnBackInvokedCallback registered above; lint does not detect that split.
-    @SuppressLint("GestureBackNavigation")
-    @Override public void onBackPressed() {
-        if (Build.VERSION.SDK_INT < 33) handleBack();
-    }
+    private void handleBack() { if (kid != null && kid.close()) return; if (web == null || !kid.isPassed()) { finish(); return; } web.evaluateJavascript("document.getElementById('modal').open ? (document.getElementById('close-modal').click(),true) : (window.returnToLanding ? window.returnToLanding() : false)", result -> { if (!"true".equals(result)) finish(); }); }
     @Override protected void onDestroy() {
-        if (Build.VERSION.SDK_INT >= 33 && backCallback != null)
-            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
-        ads.destroy(); cloud.destroy(); web.destroy(); super.onDestroy();
+        if (ads != null) ads.destroy(); if (cloud != null) cloud.destroy(); if (web != null) web.destroy(); if (kid != null) kid.destroy(); super.onDestroy();
     }
 }

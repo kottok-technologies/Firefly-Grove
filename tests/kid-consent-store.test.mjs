@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {createRequire} from 'node:module';
+import {DynamoStore} from '../aws-leaderboard/src/dynamo-store.mjs';
+import {attachConsentStore} from '../aws-leaderboard/src/consent-store.mjs';
+const require=createRequire(new URL('../aws-leaderboard/package.json',import.meta.url));
+const {DynamoDBClient,CreateTableCommand,DeleteTableCommand,waitUntilTableExists}=require('@aws-sdk/client-dynamodb');
+const {DynamoDBDocumentClient}=require('@aws-sdk/lib-dynamodb');
+const endpoint=process.env.DYNAMODB_ENDPOINT;
+test('consent claims and player ownership stay atomic through concurrent requests',{skip:!endpoint,timeout:60000},async()=>{
+  assert(['localhost','127.0.0.1'].includes(new URL(endpoint).hostname));
+  const client=new DynamoDBClient({endpoint,region:'us-east-1',credentials:{accessKeyId:'LOCALTESTONLY',secretAccessKey:'LOCALTESTONLY'}});
+  const table='kid-test-'+randomUUID();
+  await client.send(new CreateTableCommand({TableName:table,BillingMode:'PAY_PER_REQUEST',AttributeDefinitions:[{AttributeName:'pk',AttributeType:'S'},{AttributeName:'sk',AttributeType:'S'}],KeySchema:[{AttributeName:'pk',KeyType:'HASH'},{AttributeName:'sk',KeyType:'RANGE'}]}));
+  try{
+    await waitUntilTableExists({client,maxWaitTime:30},{TableName:table});
+    const store=attachConsentStore(new DynamoStore(table,DynamoDBDocumentClient.from(client)));
+    assert.equal(await store.consentGet('missing'),null);
+    const starts=await Promise.all([store.consentStart('key','digest'),store.consentStart('key','digest')]);
+    assert.equal(starts.filter(Boolean).length,1);
+    await assert.rejects(store.consentClaimed('key','wrong',{type:'challenge',challengeId:'challenge'}));
+    await store.consentClaimed('key','digest',{type:'challenge',challengeId:'challenge'});
+    await Promise.all([store.consentResolve('key','challenge','session'),store.consentResolve('key','challenge','session')]);
+    await assert.rejects(store.consentResolve('key','intruder','different'),{status:403});
+    assert.equal((await store.consentGet('key')).sessionId,'session');
+    const players=[{id:randomUUID(),tokenHash:'a',name:'First',createdAt:1},{id:randomUUID(),tokenHash:'b',name:'Second',createdAt:1}];
+    const results=await Promise.allSettled(players.map(player=>store.createPlayer(player,'key')));
+    assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+    const owner=(await store.consentGet('key')).playerId;
+    assert(owner);
+    await store.consentBind('key',owner);
+    await assert.rejects(store.consentBind('key','intruder'),{status:403});
+    const loser=players.find(p=>p.id!==owner);
+    assert.equal(await store.playerByToken(loser.tokenHash),null);
+    await store.consentRemove('key');
+    assert.equal(await store.consentGet('key'),null);
+    await assert.rejects(store.consentBind('key',owner),{status:403});
+  }finally{await client.send(new DeleteTableCommand({TableName:table}));client.destroy();}
+});

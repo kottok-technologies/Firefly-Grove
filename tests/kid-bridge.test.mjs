@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {kidBridge,onlineConsent,requireCustomUsername,kidStatus,showKidSettings} from '../web/kid-bridge.js';
+test('k-ID bridge correlates messages, times out, and ignores malformed/unsolicited replies',async()=>{
+  let sent,timeout,cleared=0;
+  const native={postMessage(text){sent=JSON.parse(text);}};
+  const bridge=kidBridge(native,{setTimer:callback=>{timeout=callback;return 1;},clearTimer:()=>cleared++});
+  const request=bridge.request();
+  native.onmessage({data:'invalid'});
+  native.onmessage({data:JSON.stringify({id:'wrong',ok:true})});
+  native.onmessage({data:JSON.stringify({id:sent.id,rankings:false})});
+  assert.deepEqual(await request,{id:sent.id,rankings:false});
+  assert.equal(cleared,1);
+  const expired=bridge.request('settings');timeout();
+  await assert.rejects(expired,/could not be checked/);
+  const broken=kidBridge({postMessage(){throw Error('closed');}});
+  await assert.rejects(broken.request(),/closed/);
+  assert.equal(kidBridge(null),null);
+  assert.deepEqual(await onlineConsent('hearts'),{});
+  await requireCustomUsername();await showKidSettings();assert.equal(await kidStatus(),null);
+});
+test('Android online actions require native permission and backend claim proof; browser preview stays independent',async()=>{
+  const code=await import('node:fs/promises').then(fs=>fs.readFile(new URL('../web/kid-bridge.js',import.meta.url),'utf8'));
+  let status={rankings:true,username:true,proof:'a'.repeat(64)};
+  globalThis.FireflyKid={postMessage(text){const {id}=JSON.parse(text);queueMicrotask(()=>this.onmessage({data:JSON.stringify({...status,id})}));}};
+  const module=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+  assert.deepEqual(await module.onlineConsent('hearts'),{'X-Firefly-Consent':'a'.repeat(64)});
+  await module.requireCustomUsername();await module.showKidSettings();assert.equal((await module.kidStatus()).username,true);
+  status={...status,username:false};
+  await assert.rejects(module.onlineConsent('profile'),/Custom usernames/);
+  await assert.rejects(module.requireCustomUsername(),/Custom usernames/);
+  status={...status,rankings:false};await assert.rejects(module.onlineConsent('runs'),/rankings are off/);
+  status={...status,rankings:true,proof:''};await assert.rejects(module.onlineConsent('hearts'),/verification is pending/);
+  delete globalThis.FireflyKid;
+});

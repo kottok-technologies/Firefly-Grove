@@ -45,3 +45,9 @@ variable "request_burst" {
     error_message = "API burst must be an integer from 1 to 1000."
   }
 }
+
+variable "kid_enforce" {
+  description = "Require verified k-ID permissions for all online clients. Enable only after consent migration and device tests; old APKs will be denied."
+  type        = bool
+  default     = false
+}

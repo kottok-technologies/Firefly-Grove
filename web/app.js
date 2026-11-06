@@ -1,3 +1,4 @@
+import {showKidSettings,hasKidSettings,requireCustomUsername,kidStatus} from './kid-bridge.js';
 import {createMotion} from './motion.js';
 import {createFireflyPlayer} from './firefly-player.js';
 import {cloudBridge} from './cloud-bridge.js';
@@ -430,13 +431,19 @@ $('restart').onclick=()=>{if(!game||busy)return;dialog('restart',{details:mode==
 $('help').onclick=()=>dialog('help');
 function showSettings(){
   dialog('settings');
+  $('kid-settings').hidden=!hasKidSettings;
+  if(hasKidSettings){
+    $('profile-save').disabled=$('race-name').disabled=true;
+    void kidStatus().then(status=>{if($('profile-save')){$('profile-save').disabled=$('race-name').disabled=!status.username;}}).catch(()=>{});
+  }
+  $('kid-settings').onclick=()=>{void showKidSettings().catch(error=>message(error.message,true));};
   $('auto-cross').checked=!!state.settings.autoCross;$('haptics').checked=!!state.settings.haptics;
   for(const [id,key]of[['auto-cross','autoCross'],['haptics','haptics']])$(id).onchange=e=>{state.settings[key]=e.target.checked;save();render();};
   $('race-name').value=state.leaderboardProfile.name;
   $('player-id').textContent=state.leaderboardProfile.id||state.leaderboardProfile.localId;
   $('profile-form').onsubmit=async event=>{
     event.preventDefault();const button=$('profile-save'),status=$('profile-error');button.disabled=true;
-    try{await profiles.rename($('race-name').value);if(status.isConnected){$('race-name').value=state.leaderboardProfile.name;status.textContent='Username saved.';}}
+    try{await requireCustomUsername();await profiles.rename($('race-name').value);if(status.isConnected){$('race-name').value=state.leaderboardProfile.name;status.textContent='Username saved.';}}
     catch(error){if(status.isConnected)status.textContent=error.message;}
     finally{button.disabled=false;}
   };
@@ -603,3 +610,8 @@ async function showHeartsLeaderboard(day=dailyKey()){
     }
   }catch(error){if(status.isConnected)status.textContent=error.status===404?'Heart rankings are awaiting the server update.':error.message;}
 }
+
+document.addEventListener('firefly-permissions',()=>{
+  if($('profile-save')&&hasKidSettings)void kidStatus().then(status=>{if($('profile-save'))$('profile-save').disabled=$('race-name').disabled=!status.username;}).catch(()=>{});
+  if(!restoringCloud)void syncHearts();
+});

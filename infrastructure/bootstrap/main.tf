@@ -97,6 +97,8 @@ resource "aws_iam_policy" "runtime_boundary" {
         Effect    = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.service.arn
         Condition = { StringEquals = { "kms:ViaService" = "dynamodb.${local.region}.amazonaws.com" } }
       },
+      { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = aws_secretsmanager_secret.kid_test.arn },
+      { Effect = "Allow", Action = ["kms:Decrypt"], Resource = aws_kms_key.service.arn, Condition = { StringEquals = { "kms:ViaService" = "secretsmanager.${local.region}.amazonaws.com" } } },
       # X-Ray write APIs do not support resource-level permissions.
       { Effect = "Allow", Action = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"], Resource = "*" }
     ]
