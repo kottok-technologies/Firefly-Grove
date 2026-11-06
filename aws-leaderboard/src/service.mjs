@@ -77,7 +77,11 @@ export function createHandler(store,{now=()=>Date.now()}={}){
         await limit('journey-finish:'+player.id,120,60000);
         const input=body();
         if(input.day!==today)throw new ApiError(410,'Hearts must upload on the UTC day the level was completed.');
+        const replayStarted=Date.now();
+        const replayContext={requestId:event.requestContext?.requestId,level:Number.isInteger(input.level)?input.level:null,version:['journey-v1','journey-v2','journey-v3','journey-v4'].includes(input.version)?input.version:'unknown'};
+        console.info('Journey replay started',replayContext);
         const completion=validateJourneyCompletion(input);
+        console.info('Journey replay completed',{...replayContext,replayMs:Date.now()-replayStarted});
         const result=await store.finishJourney({...completion,playerId:player.id,day:today});
         return respond({...result,day:today,...await store.standing('hearts',today,player.id)});
       }

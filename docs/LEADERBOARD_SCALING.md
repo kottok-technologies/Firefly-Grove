@@ -80,7 +80,7 @@ The local test does not simulate AWS throttling, Lambda cold starts, KMS,
 network latency, API Gateway limits or sustained concurrent score writes.
 
 Terraform adds DynamoDB read/write throttle alarms and an API Lambda p95
-duration alarm at eight seconds (timeout is ten seconds). As with existing
+duration alarm at eight seconds (timeout is twelve seconds). As with existing
 alarms, notification routing is not configured; these are CloudWatch alarm
 states, not email/pager delivery. The API remains capped at the configured
 50 requests/second and burst 100 by default. No traffic cap is increased
@@ -90,3 +90,7 @@ are available in CloudWatch; no billing budget notification is added here.
 Apply monitoring and the Lambda package through the existing reviewed
 Terraform pipeline. No production apply, app release build, public version
 bump or ad rollout is part of this optimization.
+
+The November 6 timeout follow-up increases Lambda allocation from 512 MB to
+2048 MB for CPU-bound authoritative puzzle replay. See [Hearts sync](HEARTS_SYNC.md)
+for the observed failure and coordinated 12/14/15-second deadlines.

@@ -24,5 +24,5 @@ resource "aws_cloudwatch_metric_alarm" "lambda_latency" {
   comparison_operator = "GreaterThanOrEqualToThreshold"
   treat_missing_data  = "notBreaching"
   dimensions          = { FunctionName = aws_lambda_function.api.function_name }
-  alarm_description   = "API p95 duration exceeds eight seconds and approaches its ten-second timeout. Configure notification routing separately."
+  alarm_description   = "API p95 duration exceeds eight seconds and approaches its twelve-second timeout. Configure notification routing separately."
 }

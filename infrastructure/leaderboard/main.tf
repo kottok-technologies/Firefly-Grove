@@ -86,9 +86,11 @@ resource "aws_lambda_function" "api" {
   handler          = "handler.handler"
   runtime          = "nodejs24.x"
   architectures    = ["arm64"]
-  memory_size      = 512
-  timeout          = 10
-  publish          = true
+  # Puzzle replay is CPU-bound: 2048 MB supplies at least one vCPU.
+  # Keep Lambda < API Gateway < the installed app's 15-second deadline.
+  memory_size = 2048
+  timeout     = 12
+  publish     = true
   environment { variables = { TABLE_NAME = aws_dynamodb_table.scores.name } }
   tracing_config { mode = "Active" }
   logging_config {
@@ -118,7 +120,7 @@ resource "aws_apigatewayv2_integration" "lambda" {
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_alias.live.invoke_arn
   payload_format_version = "2.0"
-  timeout_milliseconds   = 10000
+  timeout_milliseconds   = 14000
 }
 resource "aws_apigatewayv2_route" "api" {
   api_id    = aws_apigatewayv2_api.leaderboard.id

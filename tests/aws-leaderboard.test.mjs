@@ -142,3 +142,19 @@ test('daily journey hearts add once per level, share ranks on ties, and reset at
   assert.equal(board.mine.hearts,3);assert.equal(board.mine.levels,1);
   assert.equal((await f.call('hearts?day='+day,{player:a})).data.mine.hearts,5);
 });
+
+test('replay timing logs correlate requests without credentials or puzzle answers',async context=>{
+  const messages=[];context.mock.method(console,'info',(...args)=>messages.push(args));
+  const f=fixture(),player=await register(f),body=journey(33,0,0);
+  const response=await f.call('journey/finish',{player,body,requestContext:{requestId:'replay-test',http:{method:'POST',sourceIp:'192.0.2.1'}}});
+  assert.equal(response.statusCode,200);
+  assert.deepEqual(messages.map(item=>item[0]),['Journey replay started','Journey replay completed']);
+  for(const [,fields] of messages){
+    assert.equal(fields.requestId,'replay-test');assert.equal(fields.level,33);
+    assert.equal(fields.version,body.version);
+    assert.equal(fields.seed,undefined);assert.equal(fields.finds,undefined);
+    assert.equal(fields.playerId,undefined);assert.equal(fields.token,undefined);
+  }
+  assert.ok(messages[1][1].replayMs>=0);
+  assert.ok(!JSON.stringify(messages).includes(player.token));
+});

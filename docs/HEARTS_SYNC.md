@@ -43,3 +43,26 @@ completion-card reference after JSON reload. These are fixed in source.
 A production backend update and a later app build are distinct rollout
 steps. Do not claim the installed phone is fixed until it has successfully
 synced a new same-day completion. Ads remain parked pending k-ID.
+
+## Confirmed server timeout follow-up
+
+After the client retry fix and backend v4 deployment, CloudWatch showed
+repeated Lambda platform timeouts at exactly 10,000 ms. API Gateway returned
+503 at the same boundary, while board reads completed normally. Some completions were credited while later uploads remained queued; none
+were manually credited or removed. No DynamoDB throttle/conflict datapoints were reported in the
+investigated window. Puzzle replay is the likely compute bottleneck.
+
+Terraform now allocates 2048 MB to the ARM Lambda (CPU is proportional to
+memory) and aligns deadlines: Lambda 12 seconds, gateway 14 seconds, installed
+app 15 seconds. Infrastructure tests require at least one vCPU-equivalent
+allocation and server deadlines below the client deadline. Allocation changes
+affect compute billing; faster CPU-bound execution can offset the higher
+GB-second rate, but production timings must be measured.
+
+Replay start/completion logs contain request ID, generation, level and
+duration only. They exclude tokens, player IDs, seeds, marks and solutions.
+These logs distinguish regeneration time from subsequent database work if a
+slow request recurs. No APK change is required for this backend update.
+Approve/apply the reviewed Terraform plan, then retry existing same-day
+queued uploads and confirm their actual success before calling the issue
+resolved. Normal UTC expiry and duplicate-level safeguards remain in place.

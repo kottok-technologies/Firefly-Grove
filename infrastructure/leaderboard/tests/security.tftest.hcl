@@ -40,6 +40,14 @@ mock_provider "aws" {
 run "production_security_defaults" {
   command = plan
   assert {
+    condition     = aws_lambda_function.api.memory_size >= 1769
+    error_message = "Authoritative puzzle replay needs at least one vCPU worth of Lambda allocation."
+  }
+  assert {
+    condition     = aws_lambda_function.api.timeout * 1000 < aws_apigatewayv2_integration.lambda.timeout_milliseconds && aws_apigatewayv2_integration.lambda.timeout_milliseconds < 15000
+    error_message = "Keep server completion inside the installed app's 15-second timeout."
+  }
+  assert {
     condition     = aws_apigatewayv2_domain_name.privacy.domain_name == "www.kottok-technologies.com" && aws_apigatewayv2_domain_name.privacy.domain_name_configuration[0].security_policy == "TLS_1_2" && aws_apigatewayv2_api_mapping.privacy.api_mapping_key == "games/fireflygrove"
     error_message = "Privacy must use the requested HTTPS domain and exact path mapping."
   }
