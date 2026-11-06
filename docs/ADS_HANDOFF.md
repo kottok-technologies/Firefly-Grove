@@ -1,6 +1,6 @@
 # Rewarded ads: parked pending k-ID
 
-Last updated: November 2, 2026 (America/Chicago).
+Last updated: November 6, 2026 (America/Chicago).
 
 **User instruction:** park ad rollout until k-ID is set up. Preserve the existing implementation and test artifacts. Do not resume provider setup, infrastructure deployment, production ad rollout, or new APK/AAB builds without the user resuming this work. Public version remains `0.1.0`, Android versionCode `27`; do not bump versions for routine edits.
 
@@ -38,6 +38,8 @@ Performed using Google test inventory and the corrected APK:
 | Production ad inventory | Not tested; test-ad behavior is not proof of production creative behavior. |
 
 ## k-ID progress and blocker
+
+- November 6: user resumed SDK installation only and approved Android 12+ support. Added `com.k-id:core-ui:1.0.0`; native consent UI, initialization, permission enforcement and ad rollout remain pending. See `docs/PARENTAL_CONSENT.md` for Core SDK/Kai setup requirements.
 
 - User selected **verified parental consent for children's online features**, rather than making children permanently local-only, and selected **k-ID** as the provider. Do not replace this decision with an adult-only design without discussing it.
 - Reviewed the existing app and found automatic AWS profile registration, Play Games startup initialization, public freeform usernames, background heart uploads and cloud-restored online credentials. These are not yet gated by age/parental permissions. Existing tokens/cloud saves are not proof of consent.

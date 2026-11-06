@@ -27,7 +27,7 @@ android {
     compileSdk 36
     defaultConfig {
         applicationId 'com.fireflygrove.game'
-        minSdk 26
+        minSdk 31
         targetSdk 36
         versionCode 27
         versionName '0.1.0'
@@ -67,6 +67,7 @@ tasks.configureEach { task ->
     }
 }
 dependencies {
+    implementation 'com.k-id:core-ui:1.0.0'
     implementation 'androidx.webkit:webkit:1.12.1'
     implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
     implementation 'com.google.android.gms:play-services-ads:25.5.0'

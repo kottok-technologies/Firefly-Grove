@@ -8,6 +8,16 @@ The isolated server adapter in `aws-leaderboard/src/kid-client.mjs` implements a
 
 **This is preparatory code, not an active parental-consent flow.** It is not imported by the production handler. No new routes, consent records, SDK gating or parent UI have been deployed. Existing online behavior has not been changed by adding this module. No verification service has been provisioned or paid for, and no k-ID credentials have been stored. Do not ship an all-ages release on the assumption that parental consent is already enforced.
 
+## Android SDK installation (November 6, 2026)
+
+The Android app includes `com.k-id:core-ui:1.0.0` from Maven Central, including its transitive core library. The developer approved raising `minSdk` from 26 to 31: new builds require Android 12 or newer. Compile/target SDK remain 36; app version and versionCode are unchanged.
+
+This installs the SDK only. No SDK provider, age gate, permission settings or initialization has been wired into the game. Consent enforcement and ad rollout remain pending. The new Core SDK uses Kai publishable keys and claim/session APIs; the older isolated hosted CDK server adapter must not be assumed compatible. Confirm the chosen product and backend claim validation before wiring it in.
+
+Next SDK setup needs a test publishable key configured in Kai for `com.fireflygrove.game`, exact feature permission mappings, and Kotlin/Compose integration for the age gate and permission settings. Live setup additionally requires registering the shipped signing certificate SHA-256. Secret server API keys must remain server-only.
+
+Official installation and requirements: https://github.com/kidentify/k-id-core-sdk-android#requirements
+
 ## Developer onboarding needed
 
 1. Open [k-ID Compliance Studio](https://portal.k-id.com/). Register/sign in yourself and review the service agreement, privacy terms and applicable pricing. Confirm access to the **CDK end-to-end parental consent widget, sessions and feature permissions**, not only an age-check product. Kai and CDK offerings may have different configuration/pricing; do not assume one product's published free allowance applies to the other.
