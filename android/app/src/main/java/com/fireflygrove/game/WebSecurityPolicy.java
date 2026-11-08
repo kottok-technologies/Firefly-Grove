@@ -1,6 +1,8 @@
 package com.fireflygrove.game;
 
 import java.net.URI;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Pure URL/CSP policy, shared by navigation and resource interception. */
 final class WebSecurityPolicy {
@@ -26,6 +28,12 @@ final class WebSecurityPolicy {
         return !mainFrame && uri != null && uri.getHost().matches("[a-z0-9]+\\.execute-api\\.us-east-1\\.amazonaws\\.com")
             && uri.getPath() != null && uri.getPath().startsWith("/api/v1/") && !uri.getPath().contains("..")
             && ("GET".equals(method) || "POST".equals(method) || "PUT".equals(method) || "OPTIONS".equals(method));
+    }
+    static String consentApiOrigin(String config) {
+        Matcher match = Pattern.compile("(?:\"origin\"|\\borigin)\\s*:\\s*[\"'](https://[a-z0-9.-]+)[\"']").matcher(config);
+        if (!match.find()) return null;
+        String origin = match.group(1);
+        return isApiRequest(origin + "/api/v1/consent/claim", false, "POST") ? origin : null;
     }
     private WebSecurityPolicy() {}
 }

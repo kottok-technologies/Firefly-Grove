@@ -28,6 +28,15 @@ public class WebSecurityPolicyTest {
             assertFalse(value,WebSecurityPolicy.isApiRequest(value,false,"GET"));
         }
     }
+    @Test public void consentOriginMatchesTheGeneratedLeaderboardConfig() {
+        String origin = "https://abc123.execute-api.us-east-1.amazonaws.com";
+        assertEquals(origin, WebSecurityPolicy.consentApiOrigin(
+            "export const leaderboardConfig={\"origin\":\"" + origin + "\"};"));
+        assertEquals(origin, WebSecurityPolicy.consentApiOrigin(
+            "export const leaderboardConfig={origin:'" + origin + "'};"));
+        assertNull(WebSecurityPolicy.consentApiOrigin("export const leaderboardConfig={origin:null};"));
+        assertNull(WebSecurityPolicy.consentApiOrigin("export const leaderboardConfig={\"origin\":\"https://example.com\"};"));
+    }
     @Test public void contentPolicyAllowsOnlyPackagedScriptsAndNoFramesOrForms() {
         assertTrue(WebSecurityPolicy.CONTENT_POLICY.contains("script-src 'self';"));
         assertTrue(WebSecurityPolicy.CONTENT_POLICY.contains("worker-src 'self';"));

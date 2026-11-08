@@ -12,8 +12,7 @@ import java.util.concurrent.Executors
 internal class KidClaims(context: Context, private val prefs: SharedPreferences, private val onChange: () -> Unit) {
     private val io = Executors.newSingleThreadExecutor()
     private val origin: String? = context.assets.open("leaderboard-config.js").bufferedReader().use { it.readText() }
-        .let { Regex("origin:\\s*[\"'](https://[a-z0-9.-]+)[\"']").find(it)?.groupValues?.get(1) }
-        ?.takeIf { WebSecurityPolicy.isApiRequest(it + "/api/v1/consent/claim", false, "POST") }
+        .let(WebSecurityPolicy::consentApiOrigin)
     @Volatile private var ready = false
     @Volatile var message = "Online permission verification is pending."
         private set
