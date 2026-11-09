@@ -422,7 +422,15 @@ function tool(kind){
   cancelTap();cancelDrag();if(!isPlaying||busy||modal.open||!game||game.completed)return;if(game.lives<=0){showLoss();return;}
   if(mode==='daily'){message('Daily speed challenges have no hints or reveals. Your tools have not been spent.');return;}
   if(state[kind]<=0){offerReward(kind);return;}
-  const hint=kind==='hints'?findHint(game):{cells:[game.marks.findIndex((v,i)=>v!==2&&isTarget(game,i))],target:true,text:'A hidden friend, brought into the light. See what this firefly tells you about its row, column, and color.'};
+  let hint;
+  if(kind==='hints'){
+    hint=findHint(game);
+  }else{
+    const hiddenFireflies=game.marks.flatMap((mark,index)=>mark!==2&&isTarget(game,index)?[index]:[]);
+    if(!hiddenFireflies.length)return;
+    const cell=hiddenFireflies[Math.floor(Math.random()*hiddenFireflies.length)];
+    hint={cells:[cell],target:true,text:'A hidden friend, brought into the light. See what this firefly tells you about its row, column, and color.'};
+  }
   if(!hint){showHint({cells:[],text:'No explained deduction is available right now. Try checking your crosses or finding another firefly. No tool was spent.'},kind);return;}
   state[kind]--;for(const i of hint.cells){const result=applyMove(game,i,hint.target);if(hint.target&&result!=='ignored')game.heartFinds.push(i);}autoCross();render();save();showHint(hint,kind);if(game.completed)win();
 }

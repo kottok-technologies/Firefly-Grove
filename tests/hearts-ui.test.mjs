@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {JSDOM} from 'jsdom';
-import {createGame} from '../web/engine.js';
+import {createGame,isTarget} from '../web/engine.js';
 import {validateJourneyCompletion} from '../aws-leaderboard/src/journey.mjs';
 
 test('journey tools, restart, completion, and the hearts leaderboard preserve scoring history',async context=>{
@@ -14,7 +14,14 @@ test('journey tools, restart, completion, and the hearts leaderboard preserve sc
   try{
     for(const [key,value] of Object.entries(values))Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
     await import('../web/app.js');const $=id=>window.document.getElementById(id),saved=()=>JSON.parse(window.localStorage.getItem('firefly-grove-v1'));
-    $('play').click();$('reveal').click();assert.equal(saved().game.heartFinds.length,1);$('hint-continue').click();
+    $('play').click();
+    const initial=saved().game;
+    const hidden=initial.marks.flatMap((mark,index)=>mark!==2&&isTarget(initial,index)?[index]:[]);
+    assert.ok(hidden.length>1);
+    const random=context.mock.method(Math,'random',()=>0.99);
+    try{$('reveal').click();}finally{random.mock.restore();}
+    assert.deepEqual(saved().game.heartFinds,[hidden.at(-1)],'a reveal can pick the bottommost hidden firefly first');
+    $('hint-continue').click();
     $('restart').click();$('confirm-restart').click();assert.equal(saved().game.heartFinds.length,0);
     $('reveal').click();$('hint-continue').click();context.mock.timers.enable({apis:['setTimeout']});$('reveal').click();context.mock.timers.tick(2000);
     assert.ok($('hint-continue'),'final reveal remains visible until acknowledged');$('hint-continue').click();context.mock.timers.reset();await new Promise(resolve=>setTimeout(resolve,5));
