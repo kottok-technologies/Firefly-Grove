@@ -26,7 +26,12 @@ import java.util.function.Supplier
 
 /** Native root. The WebView (and its background networking) exists only in the pass slot. */
 class KidGate(private val activity: ComponentActivity) {
-    private val prefs = activity.getSharedPreferences("firefly_kid", 0)
+    private val publishableKey = activity.getString(R.string.kid_publishable_key)
+    private val baseUrl = activity.getString(R.string.kid_base_url)
+    private val prefs = activity.getSharedPreferences(
+        if (publishableKey.startsWith("kgp_live_")) "firefly_kid_live" else "firefly_kid",
+        0,
+    )
     private val claims = KidClaims(activity, prefs) { activity.runOnUiThread { notifyPermissions() } }
     private var settings by mutableStateOf(false)
     private var reset by mutableIntStateOf(0)
@@ -40,8 +45,8 @@ class KidGate(private val activity: ComponentActivity) {
             MaterialTheme {
                 key(reset) {
                     KIDCoreProvider(
-                        publishableKey = "kgp_test_2e652nurppaaae46i7yji4xwihp7pkxg3lgvmozmyjjteq75rzxarftitjaz7ni",
-                        baseUrl = "https://kai-api.test.k-id.com/fapi/v1",
+                        publishableKey = publishableKey,
+                        baseUrl = baseUrl,
                         declare = KIDDeclare(
                             permissions = listOf(
                                 KIDDeclare.Permission(PermissionName.LEADERBOARD_AND_RANKINGS),

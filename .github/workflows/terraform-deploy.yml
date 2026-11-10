@@ -220,7 +220,7 @@ jobs:
         run: node scripts/android-signing.mjs prepare
       - name: Build the connected APK
         run: ./android/gradlew --no-daemon --console=plain -p android assembleRelease
-          bundleRelease lintRelease
+          bundleStore lintRelease lintStore
       - name: Verify APK signature
         run: node scripts/android-signing.mjs verify
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -228,7 +228,7 @@ jobs:
           name: firefly-grove-connected-apk
           path: |
             android/app/build/outputs/apk/release/app-release.apk
-            android/app/build/outputs/bundle/release/app-release.aab
+            android/app/build/outputs/bundle/store/app-store.aab
           retention-days: 14
       - name: Remove runner signing key
         if: always()

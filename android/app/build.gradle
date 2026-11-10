@@ -36,6 +36,8 @@ android {
         versionCode 27
         versionName '0.1.0'
         resValue 'string', 'game_services_project_id', playGamesProjectId
+        resValue 'string', 'kid_publishable_key', 'kgp_test_2e652nurppaaae46i7yji4xwihp7pkxg3lgvmozmyjjteq75rzxarftitjaz7ni'
+        resValue 'string', 'kid_base_url', 'https://kai-api.test.k-id.com/fapi/v1'
     }
     signingConfigs {
         release {
@@ -57,6 +59,12 @@ android {
             resValue 'string', 'rewarded_ad_unit_id', adUnitId
             signingConfig signingConfigs.release
         }
+        store {
+            initWith release
+            matchingFallbacks = ['release']
+            resValue 'string', 'kid_publishable_key', 'kgp_live_qtvh5vmwppaaae46im675uhrmog2osso4xyshm7vubgsi3y2hdeyqubi6z575iy'
+            resValue 'string', 'kid_base_url', 'https://kai-api.k-id.com/fapi/v1'
+        }
     }
     buildFeatures { compose true }
     kotlinOptions { jvmTarget = '17' }
@@ -66,7 +74,7 @@ android {
 
 // A distributable must never silently fall back to an unsigned or debug-signed APK.
 tasks.configureEach { task ->
-    if (task.name == 'validateSigningRelease' || task.name == 'preReleaseBuild') {
+    if (task.name in ['validateSigningRelease', 'preReleaseBuild', 'validateSigningStore', 'preStoreBuild']) {
         task.doFirst {
             if (!hasReleaseSigning) throw new GradleException('Release signing credentials are missing. See docs/ANDROID_SIGNING.md.')
         }

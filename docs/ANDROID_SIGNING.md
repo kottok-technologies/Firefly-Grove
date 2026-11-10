@@ -11,7 +11,7 @@ The existing key was generated with `node scripts/setup-android-signing.mjs`. Th
 With `JAVA_HOME` set to a supported JDK:
 
 ```powershell
-./android/gradlew.bat -p android assembleRelease bundleRelease lintRelease testReleaseUnitTest
+./android/gradlew.bat -p android assembleRelease bundleStore lintRelease lintStore testReleaseUnitTest
 $env:ANDROID_HOME="$env:LOCALAPPDATA/Android/Sdk"
 node scripts/android-signing.mjs verify
 ```
@@ -21,7 +21,7 @@ The committed leaderboard configuration intentionally has no endpoint. Use the v
 Release outputs:
 
 - `android/app/build/outputs/apk/release/app-release.apk`: directly installable APK.
-- `android/app/build/outputs/bundle/release/app-release.aab`: Google Play upload bundle.
+- `android/app/build/outputs/bundle/store/app-store.aab`: Google Play upload bundle with the live Kai key. The signed sideload APK and debug builds use Kai test credentials.
 
 Release builds fail when signing credentials are unavailable. Normal `assembleDebug` remains a development build and is not the distribution/update channel.
 
