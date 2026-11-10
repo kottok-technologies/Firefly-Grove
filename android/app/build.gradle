@@ -83,7 +83,7 @@ tasks.configureEach { task ->
 dependencies {
     implementation 'com.k-id:core-ui:1.0.0'
     implementation 'androidx.activity:activity-compose:1.10.1'
-    implementation platform('androidx.compose:compose-bom:2025.09.00')
+    implementation platform('androidx.compose:compose-bom:2026.09.00')
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.webkit:webkit:1.12.1'
     implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
