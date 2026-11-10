@@ -1,25 +1,31 @@
 import {SecretsManagerClient,GetSecretValueCommand} from '@aws-sdk/client-secrets-manager';
 import {createHash} from 'node:crypto';
-const BASE='https://kai-api.test.k-id.com/api/v1/';
+const baseUrls=Object.freeze({test:'https://kai-api.test.k-id.com/api/v1/',live:'https://kai-api.k-id.com/api/v1/'});
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value);
 export class ConsentError extends Error{constructor(status,message){super(message);this.status=status;}}
 export const consentHash=token=>createHash('sha256').update(token).digest('hex');
 export function consentCredential(event){
   const token=event.headers?.['x-firefly-consent']||event.headers?.['X-Firefly-Consent']||'';
-  if(!/^[a-f0-9]{64}$/.test(token))throw new ConsentError(403,'Complete online permission verification in the app.');
-  return consentHash(token);
+  if(typeof token!=='string'||!/^(?:live\.)?[a-f0-9]{64}$/.test(token))throw new ConsentError(403,'Complete online permission verification in the app.');
+  return {key:consentHash(token),environment:token.startsWith('live.')?'live':'test'};
 }
-export function createCoreClient({secret=async()=>process.env.KID_SECRET_KEY,fetchImpl=fetch}={}){
-  async function request(path,body){
+export function createCoreClient({environment='test',secret=environmentSecret(environment),fetchImpl=fetch}={}){
+  if(environment!=='test'&&environment!=='live')throw new Error('Invalid Kai environment.');
+  async function requireKey(){
     const key=await secret();
-    if(typeof key!=='string'||!key.startsWith('kgs_test_'))throw new ConsentError(503,'k-ID server verification is not configured yet.');
-    const response=await fetchImpl(BASE+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(5000),headers:{Authorization:'Bearer '+key,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+    if(typeof key!=='string'||!key.startsWith('kgs_'+environment+'_'))throw new ConsentError(503,'k-ID server verification is not configured yet.');
+    return key;
+  }
+  async function request(path,body){
+    const key=await requireKey();
+    const response=await fetchImpl(baseUrls[environment]+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(5000),headers:{Authorization:'Bearer '+key,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
     if(!response.ok)throw new ConsentError(response.status>=500?503:409,'Online verification could not be completed. Please retry the age check.');
     const data=await response.json();
     if(!data||typeof data!=='object'||Array.isArray(data))throw new ConsentError(503,'Invalid verification response.');
     return data;
   }
   return {
+    async ensureConfigured(){await requireKey();},
     async claim(claimToken){
       if(typeof claimToken!=='string'||claimToken.length<1||claimToken.length>6000)throw new ConsentError(400,'Invalid claim token.');
       const result=await request('client/claim',{claimToken});
@@ -42,13 +48,16 @@ export function createCoreClient({secret=async()=>process.env.KID_SECRET_KEY,fet
     async delete(sessionId){if(!uuid(sessionId))throw new ConsentError(400,'Invalid saved session.');await request('session/delete',{sessionId});},
   };
 }
-export function environmentSecret(){
+export function environmentSecret(environment='test'){
+  const secretVariable=environment==='live'?'KID_LIVE_SECRET_KEY':'KID_SECRET_KEY';
+  const arnVariable=environment==='live'?'KID_LIVE_SECRET_ARN':'KID_SECRET_ARN';
   let cached,until=0;
   return async()=>{
-    if(process.env.KID_SECRET_KEY)return process.env.KID_SECRET_KEY;
-    if(!process.env.KID_SECRET_ARN)return null;
+    if(process.env[secretVariable])return process.env[secretVariable];
+    const secretId=process.env[arnVariable];
+    if(!secretId)return null;
     if(cached&&Date.now()<until)return cached;
-    const result=await new SecretsManagerClient({}).send(new GetSecretValueCommand({SecretId:process.env.KID_SECRET_ARN}));
+    const result=await new SecretsManagerClient({}).send(new GetSecretValueCommand({SecretId:secretId}));
     cached=result.SecretString;until=Date.now()+60000;return cached;
   };
 }

@@ -9,7 +9,7 @@ import java.security.SecureRandom
 import java.util.concurrent.Executors
 
 /** Durable, private outbox. No birth date, email, secret key, or claim token enters logs/cloud saves. */
-internal class KidClaims(context: Context, private val prefs: SharedPreferences, private val onChange: () -> Unit) {
+internal class KidClaims(context: Context, private val prefs: SharedPreferences, private val live: Boolean, private val onChange: () -> Unit) {
     private val io = Executors.newSingleThreadExecutor()
     private val origin: String? = context.assets.open("leaderboard-config.js").bufferedReader().use { it.readText() }
         .let(WebSecurityPolicy::consentApiOrigin)
@@ -22,7 +22,9 @@ internal class KidClaims(context: Context, private val prefs: SharedPreferences,
         check(prefs.edit().putString("authorization", it).commit())
     }
 
-    fun proof(): String = if (ready) token else ""
+    private fun credential(): String = if (live) "live.$token" else token
+
+    fun proof(): String = if (ready) credential() else ""
     fun submit(claim: String) {
         if (claim.isBlank() || claim.length > 6000) return
         check(prefs.edit().putString("claimToken", claim).putLong("claimTime", System.currentTimeMillis()).commit())
@@ -33,7 +35,7 @@ internal class KidClaims(context: Context, private val prefs: SharedPreferences,
     fun retry() {
         if (io.isShutdown) return
         val requestEpoch = epoch
-        val bearer = token
+        val bearer = credential()
         io.execute {
             if (requestEpoch != epoch) return@execute
             try {

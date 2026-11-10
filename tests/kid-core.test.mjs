@@ -51,9 +51,9 @@ function fixture(){
     consentBind:async(key,playerId)=>{const r=records.get(key);if(r.playerId&&r.playerId!==playerId)throw new ConsentError(403,'wrong owner');r.playerId=playerId;},
     consentRemove:async key=>records.delete(key),
   };
-  const provider={claim:async()=>{claimCalls++;return {type:'challenge',status:'PENDING',challengeId:id};},resolve:async()=>resolved?id:null,
+  const provider={ensureConfigured:async()=>{},claim:async()=>{claimCalls++;return {type:'challenge',status:'PENDING',challengeId:id};},resolve:async()=>resolved?id:null,
     session:async()=>({...allowed,permissions:allowed.permissions.map(p=>({...p,enabled}))}),delete:async()=>{deleted=true;}};
-  return {store,provider,service:consentService(store,provider),records,get calls(){return claimCalls;},resolve(){resolved=true;},revoke(){enabled=false;},get deleted(){return deleted;}};
+  return {store,provider,service:consentService(store,{test:provider}),records,get calls(){return claimCalls;},resolve(){resolved=true;},revoke(){enabled=false;},get deleted(){return deleted;}};
 }
 test('claim receipts retry safely; server resolves its own challenge and checks current permission per request',async()=>{
   const f=fixture();
@@ -90,7 +90,7 @@ test('server registration generates a safe name without username permission and 
   const f=fixture();await f.service.claim(event,{claimToken:'token'});f.resolve();await f.service.signal(event);
   f.provider.session=async()=>({...allowed,permissions:[...allowed.permissions,{name:'public-profile',enabled:true,managedBy:'GUARDIAN'},{name:'custom-username',enabled:false,managedBy:'GUARDIAN'}]});
   let player;
-  const h=createHandler({...f.store,limit:async()=>1,createPlayer:async(p,key)=>{player=p;await f.store.consentBind(key,p.id);},playerByToken:async()=>player},{consent:f.service,enforceConsent:true});
+  const h=createHandler({...f.store,limit:async()=>1,createPlayer:async(p,key)=>{player=p;await f.store.consentBind(key,p.id);},playerByToken:async()=>player},{consent:f.service});
   async function call(path,method,input,extra={}){return h({rawPath:'/api/v1/'+path,requestContext:{http:{method,sourceIp:'test'}},headers:{...event.headers,'content-type':'application/json',...extra},body:JSON.stringify(input)});}
   const registered=await call('players','POST',{name:'Do not publish'});
   assert.equal(registered.statusCode,201);
@@ -98,4 +98,50 @@ test('server registration generates a safe name without username permission and 
   const renamed=await call('profile','PUT',{name:'Another'},{authorization:'Bearer '+'b'.repeat(64)});
   assert.equal(renamed.statusCode,403);
   assert.match(JSON.parse(renamed.body).error,/feature is off/);
+});
+
+test('live claims use the live host and never send a test secret',async()=>{
+  const requests=[];
+  const fetchImpl=async(url,options)=>{
+    requests.push([url,options.headers.Authorization]);
+    return {ok:true,json:async()=>({type:'session',status:'PASS',sessionId:id})};
+  };
+  const wrong=createCoreClient({environment:'live',secret:async()=>'kgs_test_fake',fetchImpl});
+  await assert.rejects(wrong.claim('token'),{status:503});
+  assert.deepEqual(requests,[]);
+  const live=createCoreClient({environment:'live',secret:async()=>'kgs_live_fake',fetchImpl});
+  assert.equal((await live.claim('token')).sessionId,id);
+  assert.deepEqual(requests,[['https://kai-api.k-id.com/api/v1/client/claim','Bearer kgs_live_fake']]);
+});
+
+test('live proof cannot reuse a test receipt, and production enforcement requires live consent',async()=>{
+  const f=fixture();
+  const liveEvent={headers:{'x-firefly-consent':'live.'+'a'.repeat(64)}};
+  const calls=[];
+  const live={
+    ensureConfigured:async()=>{},
+    claim:async token=>{calls.push(token);return {type:'session',status:'PASS',sessionId:id};},
+    session:async()=>({...allowed,permissions:[...allowed.permissions,{name:'public-profile',enabled:true,managedBy:'PLAYER'}]}),
+  };
+  const consent=consentService(f.store,{test:f.provider,live});
+  await consent.claim(event,{claimToken:'test-token'});
+  await assert.rejects(consent.signal(liveEvent),{status:403});
+  const handler=createHandler({...f.store,limit:async()=>1,board:async()=>({entries:[]})},{consent,enforceConsent:true});
+  const rankings=headers=>handler({rawPath:'/api/v1/leaderboard',requestContext:{http:{method:'GET'}},headers});
+  assert.equal((await rankings(event.headers)).statusCode,403);
+  assert.equal((await rankings(liveEvent.headers)).statusCode,403);
+  assert.equal((await rankings({})).statusCode,403);
+  await consent.claim(liveEvent,{claimToken:'live-token'});
+  assert.deepEqual(calls,['live-token']);
+  assert.deepEqual(await consent.signal(liveEvent),{accepted:true,ready:true});
+  assert.equal((await rankings(liveEvent.headers)).statusCode,200);
+  assert.equal(f.records.size,2);
+});
+
+test('a missing live secret does not reserve a claim receipt',async()=>{
+  const f=fixture();
+  const liveEvent={headers:{'x-firefly-consent':'live.'+'b'.repeat(64)}};
+  const consent=consentService(f.store,{live:createCoreClient({environment:'live',secret:async()=>null})});
+  await assert.rejects(consent.claim(liveEvent,{claimToken:'live-token'}),{status:503});
+  assert.equal(f.records.size,0);
 });

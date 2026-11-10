@@ -15,8 +15,8 @@ Settings → Privacy & permissions opens KIDSettings inside KIDSettingsProvider 
 ## Backend claim boundary
 
 - onClaim immediately persists the one-time token in a private native outbox, then POSTs it to our /api/v1/consent/claim. Native retry stops after ten minutes; uncertain one-use failures require a new age check.
-- A cryptographically random app-specific bearer credential travels as X-Firefly-Consent. Only its hash is stored server-side. This is not a client-supplied k-ID session ID.
-- The backend POSTs the token to https://kai-api.test.k-id.com/api/v1/client/claim with its secret. It conditionally saves only returned session/challenge IDs and a claim digest; repeated requests return an already-saved receipt without consuming the token again.
+- A random app-specific bearer credential travels as X-Firefly-Consent. Store builds prefix it with live. to select live Kai. The backend hashes the complete credential, so adding the prefix to a test credential cannot reuse a test receipt.
+- The backend POSTs the token to /api/v1/client/claim on kai-api.test.k-id.com or kai-api.k-id.com using the matching server key. It conditionally saves only returned session/challenge IDs and a claim digest; repeated requests return an already-saved receipt without consuming the token again.
 - onSession signals /consent/session without submitting an ID. The backend resolves its own stored challenge through challenge/get-status and accepts only PASS plus a valid returned sessionId.
 - Every protected request fetches session/get using the saved sessionId, requires the relevant enabled permission and known PLAYER/GUARDIAN management, and binds the consent record to one player. New player creation and binding are one DynamoDB transaction. Username-disabled registration uses a generated server name.
 - /consent/delete calls session/delete for the saved provider session, then removes its authorization record. This is provider-consent removal, **not a complete game-account erasure feature**. Full public score/name/account deletion remains part of release work.
@@ -30,9 +30,9 @@ Terraform changes are prepared, **not applied**:
 
 1. Apply the reviewed bootstrap changes to create Secrets Manager secret **firefly-grove-production-kid-test** (customer KMS encryption, deletion protection via Terraform, no value in state) and extend the runtime boundary narrowly.
 2. In the AWS console, put the raw `kgs_test_...` key from Kai in that secret's **plaintext** value. Do not put JSON wrappers around it. Do not paste it in chat, Git, Terraform variables, APKs or logs. No secret value has been supplied or verified.
-3. Deploy the reviewed leaderboard Terraform plan. Lambda resolves KID_SECRET_ARN through Secrets Manager and treats the returned string as the server-only KID_SECRET_KEY. The Lambda handler also supports a directly injected KID_SECRET_KEY for isolated runtime tests; the existing browser-preview local server is not a consent test server. Test endpoints are fixed; a live key is rejected.
+3. Deploy the reviewed leaderboard Terraform plan. Lambda resolves KID_SECRET_ARN through Secrets Manager and treats the returned string as the server-only KID_SECRET_KEY. The Lambda handler also supports a directly injected KID_SECRET_KEY for isolated runtime tests; the existing browser-preview local server is not a consent test server. The test secret must contain a test key. The store client uses the separate live secret and live API.
 4. Test a configured, connected Android development build with synthetic adult/child scenarios: approval, denial, prohibition, timeout, restart while pending, restart with a session, permission changes, offline/reconnect, expired claim, missing key and account/cloud restoration. No end-to-end Kai test has been reported yet.
-5. `kid_enforce` defaults to false for existing APK compatibility. Requests carrying X-Firefly-Consent always undergo server authorization. Headerless legacy clients remain supported until an explicitly reviewed migration enables enforcement for everyone. **This is a staged test integration, not full production consent enforcement.**
+5. `kid_enforce` defaults to false for existing APK compatibility. Requests carrying X-Firefly-Consent always undergo server authorization. Headerless legacy clients and test consent remain supported during rollout. Enabling kid_enforce requires live consent for protected online actions. **This is a staged test integration, not full production consent enforcement.**
 6. Before all-ages release: configure the backend for live Kai claims and provision the live server key separately from the test key; set the live product’s Terms of Service and Privacy Policy URLs in Kai; publish a privacy policy describing actual k-ID processing; register Play app-signing and sideload signing SHA-256 certificates; finish old-client migration/global enforcement, public-data revocation/deletion behavior, private cloud consent treatment and account eligibility review; test provider availability and current Families requirements. Ads remain parked.
 
 No new version bump, signed release APK/AAB, AWS apply or advertising rollout is part of this source change.
@@ -40,3 +40,10 @@ No new version bump, signed release APK/AAB, AWS apply or advertising rollout is
 ## Validation
 
 Debug compilation, Android lint and JVM unit tests passed. JavaScript coverage with DynamoDB Local passed all 116 tests (above 99% lines/statements). Tests cover claim receipts and replay, forged IDs, missing secrets, current permissions, revocation, API denial and concurrent atomic player/consent ownership. Both Terraform roots validate; each root's three mocked security tests pass. These checks do not substitute for a provider sandbox/device test.
+
+## Activate live claims
+
+1. Apply the reviewed bootstrap plan to create the encrypted Secrets Manager entry `firefly-grove-production-kid-live` in us-east-1 and allow the Lambda runtime boundary to read it.
+2. In Secrets Manager, set its plaintext value to the raw Kai `kgs_live_…` server key. Keep the existing test secret for development. Terraform stores only secret metadata.
+3. Deploy the reviewed leaderboard plan. Lambda reads `KID_LIVE_SECRET_ARN` only for live credentials. A store build from before this change needs rebuilding to send the live credential prefix.
+4. Test the store build on a device signed with a certificate registered in Kai. Review the legacy-client migration before enabling global live enforcement.

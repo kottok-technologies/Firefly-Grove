@@ -47,7 +47,7 @@ variable "request_burst" {
 }
 
 variable "kid_enforce" {
-  description = "Require verified k-ID permissions for all online clients. Enable only after consent migration and device tests; old APKs will be denied."
+  description = "Require live k-ID permissions for all online clients. Enable after consent migration and device tests because legacy and test clients will be denied."
   type        = bool
   default     = false
 }

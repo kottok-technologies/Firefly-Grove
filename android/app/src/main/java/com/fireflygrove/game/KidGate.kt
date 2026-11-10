@@ -28,11 +28,12 @@ import java.util.function.Supplier
 class KidGate(private val activity: ComponentActivity) {
     private val publishableKey = activity.getString(R.string.kid_publishable_key)
     private val baseUrl = activity.getString(R.string.kid_base_url)
+    private val live = publishableKey.startsWith("kgp_live_")
     private val prefs = activity.getSharedPreferences(
-        if (publishableKey.startsWith("kgp_live_")) "firefly_kid_live" else "firefly_kid",
+        if (live) "firefly_kid_live" else "firefly_kid",
         0,
     )
-    private val claims = KidClaims(activity, prefs) { activity.runOnUiThread { notifyPermissions() } }
+    private val claims = KidClaims(activity, prefs, live) { activity.runOnUiThread { notifyPermissions() } }
     private var settings by mutableStateOf(false)
     private var reset by mutableIntStateOf(0)
     private var refresh by mutableIntStateOf(0)

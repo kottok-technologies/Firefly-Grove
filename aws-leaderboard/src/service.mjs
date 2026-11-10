@@ -62,7 +62,7 @@ export function createHandler(store,{now=()=>Date.now(),consent=null,enforceCons
       const checkConsent=async(names,playerId)=>{
         if(!needsConsent)return;
         if(!consent)throw new ConsentError(503,'k-ID server verification is not configured yet.');
-        return consent.authorize(event,names,playerId);
+        return consent.authorize(event,names,playerId,enforceConsent);
       };
       const rankingPermissions=['leaderboard-and-rankings','public-profile'];
       if(['/api/v1/leaderboard','/api/v1/hearts'].includes(path)&&method==='GET'){

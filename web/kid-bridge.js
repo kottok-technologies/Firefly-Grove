@@ -28,7 +28,7 @@ export async function onlineConsent(path){
   const status=await bridge.request();
   if(!status.rankings)throw Error('Online rankings are off. Manage access in Settings → Privacy & permissions.');
   if(path==='profile'&&!status.username)throw Error('Custom usernames are off. Manage access in Settings → Privacy & permissions.');
-  if(!/^[a-f0-9]{64}$/.test(status.proof))throw Error(status.message||'Online permission verification is pending.');
+  if(!/^(?:live\.)?[a-f0-9]{64}$/.test(status.proof))throw Error(status.message||'Online permission verification is pending.');
   return {'X-Firefly-Consent':status.proof};
 }
 export async function showKidSettings(){if(bridge)await bridge.request('settings');}

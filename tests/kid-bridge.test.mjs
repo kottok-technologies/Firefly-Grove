@@ -25,6 +25,8 @@ test('Android online actions require native permission and backend claim proof; 
   globalThis.FireflyKid={postMessage(text){const {id}=JSON.parse(text);queueMicrotask(()=>this.onmessage({data:JSON.stringify({...status,id})}));}};
   const module=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
   assert.deepEqual(await module.onlineConsent('hearts'),{'X-Firefly-Consent':'a'.repeat(64)});
+  status.proof='live.'+status.proof;
+  assert.deepEqual(await module.onlineConsent('hearts'),{'X-Firefly-Consent':'live.'+'a'.repeat(64)});
   await module.requireCustomUsername();await module.showKidSettings();assert.equal((await module.kidStatus()).username,true);
   status={...status,username:false};
   await assert.rejects(module.onlineConsent('profile'),/Custom usernames/);
