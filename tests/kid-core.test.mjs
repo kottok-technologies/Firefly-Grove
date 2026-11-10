@@ -145,3 +145,31 @@ test('a missing live secret does not reserve a claim receipt',async()=>{
   await assert.rejects(consent.claim(liveEvent,{claimToken:'live-token'}),{status:503});
   assert.equal(f.records.size,0);
 });
+
+test('server environment provides separate live and test Kai keys', async context => {
+  for (const [name, value] of Object.entries({KID_SECRET_KEY: 'kgs_live_fake', KID_TEST_SECRET_KEY: 'kgs_test_fake'})) {
+    const previous = process.env[name];
+    process.env[name] = value;
+    context.after(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
+  }
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push([url, options.headers.Authorization, options.method]);
+    return {ok: true, json: async () => url.includes('get-status') ? {status: 'PASS', sessionId: id} : allowed};
+  };
+  const live = createCoreClient({environment: 'live', fetchImpl});
+  const development = createCoreClient({fetchImpl});
+  assert.equal(await live.resolve(id), id);
+  assert.deepEqual(await live.session(id), allowed);
+  await live.delete(id);
+  await development.session(id);
+  assert.deepEqual(requests, [
+    ['https://kai-api.k-id.com/api/v1/challenge/get-status?challengeId='+id, 'Bearer kgs_live_fake', 'GET'],
+    ['https://kai-api.k-id.com/api/v1/session/get?sessionId='+id, 'Bearer kgs_live_fake', 'GET'],
+    ['https://kai-api.k-id.com/api/v1/session/delete', 'Bearer kgs_live_fake', 'POST'],
+    ['https://kai-api.test.k-id.com/api/v1/session/get?sessionId='+id, 'Bearer kgs_test_fake', 'GET'],
+  ]);
+});

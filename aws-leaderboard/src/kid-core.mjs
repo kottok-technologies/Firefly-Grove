@@ -49,7 +49,7 @@ export function createCoreClient({environment='test',secret=environmentSecret(en
   };
 }
 export function environmentSecret(environment='test'){
-  const secretVariable=environment==='live'?'KID_LIVE_SECRET_KEY':'KID_SECRET_KEY';
+  const secretVariable=environment==='live'?'KID_SECRET_KEY':'KID_TEST_SECRET_KEY';
   const arnVariable=environment==='live'?'KID_LIVE_SECRET_ARN':'KID_SECRET_ARN';
   let cached,until=0;
   return async()=>{

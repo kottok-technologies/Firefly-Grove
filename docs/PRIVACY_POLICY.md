@@ -16,6 +16,8 @@ After editing the canonical content, run `node scripts/sync-privacy.mjs` to refr
 
 ## Handling deletion requests
 
+For a verified account-deletion request, include every linked Kai consent record in the review. Delete each stored Kai session using that record’s live or test environment before removing its consent record. The app’s consent deletion endpoint removes one installation’s Kai session and consent record. Use the verified support process to handle the full game profile and associated records.
+
 The page provides a public email-based request process. Settings displays the server-issued Player ID once registered, falling back to the device's local ID before online registration. Ask the requester for that ID and username, never a password, bearer token or Google OAuth token. Verify ownership with the minimum information necessary before any deletion. Do not treat a public username or tag alone as sufficient proof.
 
 A verified online deletion needs to cover the player's profile and token-hash authentication record; player-partition race/active records and permanent heart-credit receipts; and associated daily race/heart scores and ranking rows. Maintain the affected ranking totals consistently. This document does not implement or authorize an automatic destructive deletion command. Record completion and explain any necessary legal/security retention. Operational logs expire after 30 days; point-in-time database backups can retain earlier records for up to 35 days. Daily data has a 92-day TTL and asynchronous physical cleanup.
