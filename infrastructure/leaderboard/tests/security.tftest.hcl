@@ -60,6 +60,10 @@ run "production_security_defaults" {
     error_message = "Only privacy GET/HEAD routes should receive the extra Lambda permission."
   }
   assert {
+    condition     = toset([for route in aws_apigatewayv2_route.terms : route.route_key]) == toset(["GET /terms-of-service.html", "HEAD /terms-of-service.html"]) && endswith(aws_lambda_permission.terms.source_arn, "/terms-of-service.html") && aws_lambda_permission.terms.source_account == var.aws_account_id
+    error_message = "Terms must use exact GET/HEAD routes and account-scoped Lambda invocation."
+  }
+  assert {
     condition     = aws_dynamodb_table.scores.deletion_protection_enabled && aws_dynamodb_table.scores.point_in_time_recovery[0].enabled && aws_dynamodb_table.scores.server_side_encryption[0].enabled
     error_message = "Production scores need deletion protection, PITR and encryption."
   }

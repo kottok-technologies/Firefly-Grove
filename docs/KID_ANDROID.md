@@ -6,7 +6,7 @@ The Android app requires API 31+, compiles/targets API 36, and uses Kotlin/Compo
 
 The public **test** publishable key supplied by the developer is in KidGate.kt. It is not a server secret. **Add package/applicationId `com.fireflygrove.game` to that test key's Android app allowlist in Kai.**
 
-Declared capabilities: leaderboard-and-rankings, public-profile (public display name/tag/scores), custom-username. There are no chat, voice, purchases, custom avatars, targeted ads or real-time multiplayer features to declare. Privacy policy uses the existing public developer URL; support is kottok.technologies@gmail.com. The 512px PNG game icon is packaged as file:///android_asset/assets/game-icon.png. The developer confirmed there is no Terms of Service yet: that field is intentionally unset, not a guessed URL.
+Declared capabilities: leaderboard-and-rankings, public-profile (public display name/tag/scores), custom-username. There are no chat, voice, purchases, custom avatars, targeted ads or real-time multiplayer features to declare. Privacy policy uses the existing public developer URL; support is kottok.technologies@gmail.com. The 512px PNG game icon is packaged as file:///android_asset/assets/game-icon.png. The Terms of Service declaration points to https://www.kottok-technologies.com/games/fireflygrove/terms-of-service.html. Deploy the public page before distributing the updated app.
 
 Private native preferences retain sessionId and challengeId across process restarts; settings requests keep a separate settingsChallengeId. The native preferences are outside game/cloud saves and Android backup is disabled. No DOB or parent email is copied into the game's save.
 

@@ -49,7 +49,7 @@ class KidGate(private val activity: ComponentActivity) {
                                 KIDDeclare.Permission(PermissionName.CUSTOM_USERNAME),
                             ),
                             privacyPolicyUrl = DeclareField.Set("https://www.kottok-technologies.com/games/fireflygrove/privacy-policy.html"),
-                            // No developer Terms of Service exist yet; keep this unset.
+                            termsOfServiceUrl = DeclareField.Set("https://www.kottok-technologies.com/games/fireflygrove/terms-of-service.html"),
                             iconUrl = DeclareField.Set("file:///android_asset/assets/game-icon.png"),
                             supportEmail = "kottok.technologies@gmail.com",
                         ),

@@ -87,3 +87,21 @@ resource "aws_lambda_permission" "privacy" {
 output "privacy_policy_url" {
   value = "https://${local.privacy_domain}/${aws_apigatewayv2_api_mapping.privacy.api_mapping_key}/privacy-policy.html"
 }
+
+# Reuse the public HTTPS mapping with an exact path and separate invoke permission.
+resource "aws_apigatewayv2_route" "terms" {
+  for_each  = toset(["GET", "HEAD"])
+  api_id    = aws_apigatewayv2_api.leaderboard.id
+  route_key = "${each.value} /terms-of-service.html"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_lambda_permission" "terms" {
+  statement_id   = "AllowTermsOfServiceHttpApi"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.api.function_name
+  qualifier      = aws_lambda_alias.live.name
+  principal      = "apigateway.amazonaws.com"
+  source_account = local.account_id
+  source_arn     = "${aws_apigatewayv2_api.leaderboard.execution_arn}/*/*/terms-of-service.html"
+}
