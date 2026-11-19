@@ -17,7 +17,7 @@ Push CI keeps its normal development builds and quality/security checks. Signed 
 
 ## Play locally
 
-Requires Node.js 24.12 or newer within Node 24. Playing locally needs no npm installation; CI lint and coverage tools require `npm ci`.
+Requires Node.js 24.15 or newer within Node 24. Playing locally needs no npm installation; CI lint and coverage tools require `npm ci`.
 
 ```sh
 npm start
@@ -60,9 +60,9 @@ Generation uses a module worker so larger boards do not freeze the screen. Gener
 
 ## Android build
 
-Open `android/` in Android Studio. Use JDK 17 or later and Android SDK platform 36. The included Gradle wrapper pins Gradle 8.14.3 with Android Gradle Plugin 8.13.0. Set the local SDK path through Studio or an ignored `android/local.properties` file. Let Studio sync, then Run on an Android 12+ emulator or device, or Build APK(s). The Android build includes `web/` directly as its assets, served with AndroidX WebViewAssetLoader. No server is needed on the phone. Both compileSdk and targetSdk are 36; minSdk is 31 (Android 12), required by the k-ID Core SDK.
+Open `android/` in Android Studio. Use JDK 17 or later and Android SDK platform 37. The included Gradle wrapper pins Gradle 9.9.0 with Android Gradle Plugin 9.5.1. Set the local SDK path through Studio or an ignored `android/local.properties` file. Let Studio sync, then Run on an Android 12+ emulator or device, or Build APK(s). The Android build includes `web/` directly as its assets, served with AndroidX WebViewAssetLoader. No server is needed on the phone. compileSdk is 37 and targetSdk is 36; minSdk is 31 (Android 12), required by the k-ID Core SDK.
 
-From the `android/` directory, run `./gradlew assembleDebug` (Windows: `gradlew.bat assembleDebug`). The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. This is a debug-signed build for sideloading and testing; distribution builds use the persistent release configuration documented below. Android 13+ Back uses the platform's OnBackInvokedCallback, while older devices retain the legacy callback. See the [Android back-navigation guide](https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture) and [AGP 8.13 compatibility](https://developer.android.com/build/releases/agp-8-13-0-release-notes).
+From the `android/` directory, run `./gradlew assembleDebug` (Windows: `gradlew.bat assembleDebug`). The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`. This is a debug-signed build for sideloading and testing; distribution builds use the persistent release configuration documented below. Android 13+ Back uses the platform's OnBackInvokedCallback, while older devices retain the legacy callback. See the [Android back-navigation guide](https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture) and [AGP 9.5 compatibility](https://developer.android.com/build/releases/agp-9-5-0-release-notes).
 
 The SDK 36 debug build was compiled successfully, Android lint completed with zero errors (six non-blocking warnings), and APK signature verification passed. Security release 1.4.1 removes unsafe dialog interpolation and the unused native bridge, validates worker messages, and restricts WebView content. Current CI produces development builds, manually requested signed distribution artifacts, and test/security reports; see [the security review](docs/SECURITY_REVIEW.md) for scope and validation. The initial APK was emulator-tested by the user; subsequent updates have been browser-tested and still need emulator/device verification. Production reward ads remain unconfigured.
 

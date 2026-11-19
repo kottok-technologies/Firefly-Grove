@@ -15,13 +15,13 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "c8": "12.0.0",
-    "eslint": "10.13.0",
+    "eslint": "10.15.0",
     "globals": "17.13.0",
-    "jsdom": "29.1.1",
+    "jsdom": "30.1.3",
     "yaml": "2.9.1"
   },
   "engines": {
-    "node": ">=24.12.0 <25"
+    "node": ">=24.15.0 <25"
   },
   "c8": {
     "all": true,
@@ -62,5 +62,11 @@
     "statements": 95,
     "functions": 90,
     "branches": 85
+  },
+  "overrides": {
+    "test-exclude": {
+      "glob": "^14.0.2",
+      "minimatch": "^11.0.9"
+    }
   }
 }
