@@ -1,0 +1,5 @@
+# WorkManager's Room 2.2 database is constructed by name at startup.
+# Its library rule preserves the class but omits the reflected constructor.
+-keep class androidx.work.impl.WorkDatabase_Impl {
+    public <init>();
+}
