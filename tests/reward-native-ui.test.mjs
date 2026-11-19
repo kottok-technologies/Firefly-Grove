@@ -26,8 +26,19 @@ test('Android rewards require earned callback, retry safely, and grant each rewa
     pending=$('preview-reward').onclick();reply({ok:true,earned:true});await pending;assert.equal(saved().hints,1);
     reply({ok:true,earned:true});assert.equal(saved().hints,1);
     $('settings').click();await new Promise(resolve=>setTimeout(resolve,0));$('more-tools').click();$('extra-reveal').click();pending=$('preview-reward').onclick();assert.equal(request.kind,'reveals');reply({ok:true,earned:true});await pending;assert.equal(saved().reveals,1);
-    $('play').click();$('revive').click();pending=$('preview-reward').onclick();assert.equal(request.kind,'life');reply({ok:true,earned:true});await pending;
+    $('play').click();
+    assert.equal($('close-modal').hidden,true);
+    $('revive').click();
+    assert.equal($('close-modal').hidden,true);
+    $('reward-back').click();
+    assert.ok($('retry'));
+    assert.equal($('close-modal').hidden,true);
+    $('revive').click();pending=$('preview-reward').onclick();assert.equal(request.kind,'life');reply({ok:true,earned:true});await pending;
     assert.equal(saved().game.lives,1);assert.equal(saved().game.heartFinds.at(-1),-1);
+    $('restart').click();
+    assert.equal($('close-modal').hidden,false);
+    $('close-modal').click();
+    assert.equal($('modal').open,false);
   }finally{
     for(const [key,descriptor] of Object.entries(previous)){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}
     window.close();

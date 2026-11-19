@@ -23,7 +23,8 @@ internal object KidBridge {
                 if (operation == "settings") gate.openSettings()
                 val proof = gate.proof()
                 reply.postMessage(JSONObject().put("id", id).put("ok", true)
-                    .put("rankings", gate.allowed("leaderboard-and-rankings") && gate.allowed("public-profile"))
+                    .put("rankings", gate.allowed("leaderboard-and-rankings"))
+                    .put("publicProfile", gate.allowed("public-profile"))
                     .put("username", gate.allowed("custom-username"))
                     .put("proof", proof).put("message", gate.claimMessage()).toString())
             } catch (_: Exception) { /* Malformed messages never authorize anything. */ }

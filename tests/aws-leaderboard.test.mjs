@@ -78,22 +78,35 @@ test('AWS API authenticates profiles, normalizes nicknames and supports renames'
   for(const name of [null,'x','<script>'])assert.throws(()=>normalizeName(name));
   assert.equal((await f.call('players',{body:{name:'<script>'}})).statusCode,400);
 });
-test('AWS finish uses server time, enforces ownership and retries idempotently',async()=>{
-  const f=fixture(),a=await register(f),b=await register(f,'Birch'),run=(await start(f,a)).data;f.advance(20000);
-  assert.equal((await f.call('finish',{player:b,body:{runId:run.id,finds}})).statusCode,404);
-  assert.equal((await f.call('finish',{player:a,body:{runId:run.id,finds:finds.slice(1)}})).statusCode,400);
-  const finish=()=>f.call('finish',{player:a,body:{runId:run.id,finds,elapsedMs:1}});
-  const result=await finish();assert.equal(result.statusCode,200);assert.equal(result.data.elapsedMs,20000);assert.equal(result.data.mine.rank,1);
+test('AWS finish ranks device solve time, enforces ownership and retries idempotently',async()=>{
+  const f=fixture(),a=await register(f),b=await register(f,'Birch'),run=(await start(f,a)).data;
+  f.advance(120000);
+  const finish=(elapsedMs)=>f.call('finish',{player:a,body:{runId:run.id,finds,elapsedMs}});
+  assert.equal((await f.call('finish',{player:b,body:{runId:run.id,finds,elapsedMs:19000}})).statusCode,404);
+  assert.equal((await f.call('finish',{player:a,body:{runId:run.id,finds:finds.slice(1),elapsedMs:19000}})).statusCode,400);
+  for(const invalid of [0,-1,1.5,'19000',null,36*3600000+1]){
+    assert.equal((await finish(invalid)).statusCode,400);
+  }
+  const result=await finish(19000);
+  assert.equal(result.statusCode,200);
+  assert.equal(result.data.elapsedMs,19000);
+  assert.equal(result.data.mine.rank,1);
   assert.equal(result.data.entries,undefined,'completion replies do not fetch the public list');
-  f.advance(5000);assert.equal((await finish()).data.elapsedMs,20000);
-  const next=(await start(f,a)).data;f.advance(30000);await f.call('finish',{player:a,body:{runId:next.id,finds}});
-  const board=(await f.call('leaderboard?day='+day,{player:a})).data;assert.equal(board.total,1);assert.equal(board.mine.elapsedMs,20000);
+  f.advance(5000);
+  assert.equal((await finish(18000)).data.elapsedMs,19000,'a retry retains the accepted solve time');
+  const next=(await start(f,a)).data;f.advance(30000);
+  const legacy=await f.call('finish',{player:a,body:{runId:next.id,finds}});
+  assert.equal(legacy.statusCode,200);
+  assert.equal(legacy.data.elapsedMs,30000,'older apps still receive a server-timed result');
+  const board=(await f.call('leaderboard?day='+day,{player:a})).data;
+  assert.equal(board.total,1);
+  assert.equal(board.mine.elapsedMs,19000);
 });
 test('AWS run replacement, expiry, malformed input and request limits are enforced',async()=>{
   const f=fixture(),player=await register(f),first=(await start(f,player)).data;await start(f,player);f.advance(1000);
   assert.equal((await f.call('finish',{player,body:{runId:first.id,finds}})).statusCode,409);
   const fresh=(await start(f,player)).data;f.advance(37*3600000);
-  assert.equal((await f.call('finish',{player,body:{runId:fresh.id,finds}})).statusCode,409);
+  assert.equal((await f.call('finish',{player,body:{runId:fresh.id,finds,elapsedMs:19000}})).statusCode,409);
   assert.equal((await f.call('runs',{player,body:{day,version:'old'}})).statusCode,409);
   assert.equal((await f.call('finish',{player,body:{runId:1}})).statusCode,400);
   assert.equal((await f.call('players',{body:{name:'x'.repeat(9000)}})).statusCode,413);

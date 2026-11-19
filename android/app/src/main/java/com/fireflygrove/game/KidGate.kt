@@ -119,7 +119,9 @@ class KidGate(private val activity: ComponentActivity) {
                                                     challengeId = prefs.getString("settingsChallengeId", null),
                                                     onChallenge = { prefs.edit().putString("settingsChallengeId", it).commit() },
                                                 ) { KIDSettings() }
-                                                KIDPermission(PermissionName.LEADERBOARD_AND_RANKINGS, fallback = { Text("Leaderboard permission is off.") }) { Text("Leaderboard permission is on.") }
+                                                Text("Online leaderboards require both Leaderboards and rankings and Public profile.")
+                                                KIDPermission(PermissionName.LEADERBOARD_AND_RANKINGS, fallback = { Text("Leaderboards and rankings is off.") }) { Text("Leaderboards and rankings is on.") }
+                                                KIDPermission(PermissionName.PUBLIC_PROFILE, fallback = { Text("Public profile is off.") }) { Text("Public profile is on.") }
                                                 KIDPermission(PermissionName.CUSTOM_USERNAME, fallback = { Text("Custom usernames are off.") }) { Text("Custom usernames are enabled.") }
                                                 Text(claims.message)
                                                 TextButton(onClick = {

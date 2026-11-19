@@ -14,6 +14,7 @@ import {renderDialog} from './dialogs.js';
 import {raceApi,LEADERBOARD_ORIGIN} from './leaderboard-client.js';
 import { createGame, applyMove, findHint, isTarget, levelConfig } from './engine.js';
 import { cellsAlongSegment, paintNotes } from './gestures.js';
+import { TRAINING_SEED, trainingStep } from './training.js';
 import {dailyKey,createDailyGame,beginDailyRun,dailyElapsed,freezeDailyRun,recordDailyResult,formatSpeed} from './daily.js';
 const $ = id => document.getElementById(id);
 const rewardAds=rewardBridge();
@@ -45,7 +46,7 @@ const prizes=placementRewards({state,origin:LEADERBOARD_ORIGIN,profile:profiles.
 const puzzleKey = puzzle => puzzle.size + ':' + puzzle.regions.map(r=>r.toString(36)).join('');
 let game=state.game, busy=false, tick=Date.now(), pendingTap=null, worker=null, isPlaying=false;
 let renderedGame=null, idleTimer=null;
-let mode='journey';
+let mode='journey',lesson=null;
 if(game&&!game.completed)initializeHeartFinds(game);
 let drag=null,suppressDragClick=false;
 const mistakeTimers=new WeakMap();
@@ -110,12 +111,20 @@ function showHint(hint,kind){
   activeHint={game,foundCells:hint.target?hint.cells:[],cleanup:renderHintBoard($('hint-board-stage'),$('board'),hintFocus(game,hint),hint.cells)};
   $('hint-continue').onclick=close;$('hint-continue').focus();
 }
-function dialog(name,values){cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');const replacing=modal.open;renderDialog($('modal-content'),name,values);if(!modal.open)modal.showModal();if(replacing)motion.enter($('modal-content'));}
+function outOfLives(){return isPlaying&&game?.lives<=0;}
+function dialog(name,values){
+  cancelTap();cancelDrag();stopIdle();$('game-status').classList.remove('show-toast');
+  $('close-modal').hidden=outOfLives();
+  const replacing=modal.open;
+  renderDialog($('modal-content'),name,values);
+  if(!modal.open)modal.showModal();
+  if(replacing)motion.enter($('modal-content'));
+}
 function cancelCloudChoice(){const cancel=cloudChoiceCancel;cloudChoiceCancel=null;if(cancel)void cancel();}
 function close(){if(rewardPending)rewardAds?.cancel();cancelCloudChoice();modal.close();finishHint();tick=Date.now();scheduleIdle();}
-$('close-modal').onclick=()=>{if(!isPlaying||!game||game.lives>0)close();};
+$('close-modal').onclick=()=>{if(!outOfLives())close();};
 modal.addEventListener('close',()=>{if(!modal.open){cancelCloudChoice();finishHint();tick=Date.now();scheduleIdle();}});
-modal.addEventListener('cancel',e=>{if(isPlaying&&game?.lives<=0||cloudChoiceCancel&&cloud?.status().working)e.preventDefault();});
+modal.addEventListener('cancel',e=>{if(outOfLives()||cloudChoiceCancel&&cloud?.status().working)e.preventDefault();});
 function cancelTap(){pendingTap=null;}
 function cancelDrag(){
   const previous=drag;drag=null;
@@ -135,7 +144,7 @@ function renderHome(){
   const day=dailyKey(),record=state.dailyRecords[day],run=state.dailyRun?.dailyDay===day?state.dailyRun:null;
   $('daily-date').textContent=new Date(day+'T00:00:00Z').toLocaleDateString(undefined,{month:'short',day:'numeric',timeZone:'UTC'});
   $('daily-best').textContent=record?`Personal best ${formatSpeed(record.bestMs)} · ${record.finishes} ${record.finishes===1?'finish':'finishes'}`:'Set your first time today';
-  $('daily-label').textContent=run?.completed?'Replay today’s puzzle':run?.lives<=0?'Try today again':run?.startedAt!=null?'Continue daily run':'Daily speed challenge';
+  $('daily-label').textContent=run?.completed?'Replay today’s puzzle':run?.lives<=0?'Try today again':run?.startedAt!=null?'Continue daily run':'Play daily puzzle';
   const previous=state.dailyRun;
   $('daily-previous').hidden=!(previous&&previous.dailyDay!==day&&previous.startedAt!==null&&!previous.completed&&previous.lives>0);
   if(!$('daily-previous').hidden)$('daily-previous').textContent=`Continue unfinished run · ${previous.dailyDay}`;
@@ -211,8 +220,17 @@ function render(){
   $('level-prefix').textContent=daily?'Daily':'Level';$('level').textContent=daily?'':game.level;
   $('difficulty').textContent=daily?(game.online?'Ranked':'Practice'):levelConfig(game.level,game.generation||'journey-v1').label;
   $('chapter').textContent=daily?`${game.dailyDay} · UTC`:game.level<=6?'THE FIRST GLOW':'INTO THE GROVE';
-  $('journey-tools').hidden=daily;$('daily-rules').hidden=!daily;
-  $('hint').disabled=$('reveal').disabled=daily||busy||game.completed;
+  lesson=daily?null:trainingStep(game);
+  $('journey-tools').hidden=daily||!!lesson;$('daily-rules').hidden=!daily;
+  $('hint').disabled=$('reveal').disabled=daily||!!lesson||busy||game.completed;
+  $('gesture').hidden=!!lesson;
+  const guide=$('training-guide');
+  guide.hidden=!lesson;
+  guide.parentElement.classList.toggle('training-footer',!!lesson);
+  if(lesson){
+    $('training-progress').textContent=`Training ${lesson.position} of ${lesson.total}`;
+    $('training-instruction').textContent=lesson.text;
+  }
   $('board-complete').hidden=!game.completed||busy;
   $('board-wrap').classList.toggle('is-complete',game.completed&&!busy);
   $('board').inert=game.completed;
@@ -249,6 +267,19 @@ function render(){
     if(value===2){cell.insertAdjacentHTML('beforeend',fly);if(!fresh&&!reducedMotion.matches)playFound(cell);}
     if(value===1&&!fresh&&!reducedMotion.matches)cell.classList.add('just-crossed');
   });
+  const wasTraining=board.classList.contains('training-board');
+  board.classList.toggle('training-board',!!lesson);
+  if(lesson||wasTraining){
+    [...board.children].forEach((cell,i)=>{
+      const next=lesson?.cell===i;
+      cell.classList.toggle('training-context',!!lesson?.context.includes(i));
+      cell.classList.toggle('training-next',next);
+      if(lesson&&!next)cell.setAttribute('aria-disabled','true');
+      else cell.removeAttribute('aria-disabled');
+      if(next)cell.setAttribute('aria-describedby','training-instruction');
+      else cell.removeAttribute('aria-describedby');
+    });
+  }
   if(fresh)scheduleIdle();
   updateTime();
 }
@@ -261,6 +292,11 @@ async function newLevel(restart=false){
   if(mode==='daily')return newDailyRun(game?.dailyDay||dailyKey());
   cancelTap();cancelDrag();busy=true;$('board-wrap').classList.add('is-generating');$('board-complete').hidden=true;$('board-wrap').classList.remove('is-complete');$('loading').hidden=false;$('hint').disabled=$('reveal').disabled=true;
   if(restart){game={...game,marks:Array(game.size**2).fill(0),lives:3,mistakes:0,elapsed:0,completed:false,heartFinds:[],heartCompletion:null};game.givens.forEach(i=>game.marks[i]=2);finishLoad();return;}
+  if(state.level===1){
+    game=createGame(1,TRAINING_SEED);
+    state.puzzleKeys.push(puzzleKey(game));
+    finishLoad();return;
+  }
   let seed=(state.installSeed+Math.imul(state.level,2654435761))>>>0;
   try{
     game=await new Promise((resolve,reject)=>{
@@ -283,13 +319,17 @@ function vibrate(){if(state.settings.haptics)navigator.vibrate?.(50);}
 function autoCross(){if(mode==='daily'||!state.settings.autoCross)return;const n=game.size,targets=game.marks.flatMap((v,i)=>v===2?[i]:[]);game.marks.forEach((v,i)=>{if(!v&&!isTarget(game,i)&&targets.some(t=>Math.floor(t/n)===Math.floor(i/n)||t%n===i%n||game.regions[t]===game.regions[i]||(Math.abs(Math.floor(t/n)-Math.floor(i/n))<=1&&Math.abs(t%n-i%n)<=1)))game.marks[i]=1;});}
 function move(i,target){
   if(!isPlaying||busy||modal.open)return;
+  if(lesson){
+    if(i!==lesson.cell||target!==!!lesson.find)return;
+    cancelTap();
+  }
   const result=applyMove(game,i,target);
   if(result==='ignored')return;
   if(target&&mode==='journey')game.heartFinds.push(i);
   if(target&&mode==='daily'&&game.online?.status==='active')game.rankedFinds.push(i);
   if(mode==='daily'&&game.lives===0)freezeDailyRun(game);
   if(result==='mistake'){vibrate();message('No firefly here. One life lost.',true);}
-  else {autoCross();if(target)message('A little light found. Every row, column, and color has just one.');}
+  else {if(!lesson)autoCross();if(target)message('A little light found. Every row, column, and color has just one.');}
   render();save();
   if(result==='mistake')showMistake($('board').children[i]);
   if(game?.lives===0)showLoss();else if(result==='won')win();
@@ -297,6 +337,7 @@ function move(i,target){
 $('board').addEventListener('pointerdown',e=>{
   if(!e.isPrimary||e.button!==0||drag||!isPlaying||busy||modal.open||!game||game.completed||game.lives<=0)return;
   suppressDragClick=false;
+  if(lesson)return;
   const cell=e.target.closest('[data-cell]');if(!cell)return;
   const i=Number(cell.dataset.cell);if(game.marks[i]===2)return;
   const point={x:e.clientX,y:e.clientY};
@@ -328,7 +369,7 @@ $('board').addEventListener('click',e=>{
   const cell=e.target.closest('[data-cell]');
   if(!cell||!isPlaying||busy||modal.open||!game||game.completed||game.lives<=0)return;
   const i=Number(cell.dataset.cell);
-  if(e.detail===0){cancelTap();move(i,e.shiftKey);return;}
+  if(e.detail===0){cancelTap();move(i,lesson?!!lesson.find:e.shiftKey);return;}
   if(game.marks[i]===2){cancelTap();return;}
   const now=performance.now();
   if(pendingTap?.i===i&&now-pendingTap.at<=DOUBLE_TAP_MS){
@@ -558,11 +599,11 @@ function updateRaceStatus(run){
 const submittingRaces=new WeakSet();
 async function submitRace(run){
   if(!run.online||submittingRaces.has(run))return;submittingRaces.add(run);delete run.online.error;updateRaceStatus(run);
-  try{if(state.leaderboardProfile?.id!==run.online.profileId)throw Error('This race belongs to a different player profile.');run.online.result=await raceApi('finish',{method:'POST',profile:state.leaderboardProfile,body:{runId:run.online.runId,finds:run.rankedFinds}});run.online.status='finished';}
-  catch(error){run.online.error=error.message+' Retry when connected; the server clock keeps running until your finish arrives.';}
+  try{if(state.leaderboardProfile?.id!==run.online.profileId)throw Error('This race belongs to a different player profile.');run.online.result=await raceApi('finish',{method:'POST',profile:state.leaderboardProfile,body:{runId:run.online.runId,finds:run.rankedFinds,elapsedMs:run.elapsedMs}});run.online.status='finished';}
+  catch(error){run.online.error=error.message+' Your finish time is saved. Retry when connected.';}
   finally{submittingRaces.delete(run);delete run.online.sending;try{if(!restoringCloud){localStorage.setItem(STORAGE,JSON.stringify(state));cloud?.changed();}}catch{}updateRaceStatus(run);}
 }
-const rankingButton=document.createElement('button');rankingButton.id='leaderboard';rankingButton.className='secondary leaderboard-button';rankingButton.textContent='Speed leaderboard ◷';rankingButton.onclick=()=>showLeaderboard();$('daily-best').before(rankingButton);
+const rankingButton=document.createElement('button');rankingButton.id='leaderboard';rankingButton.className='secondary leaderboard-button';rankingButton.textContent='Speed leaderboard ◷';rankingButton.onclick=()=>showLeaderboard();$('daily-previous').before(rankingButton);
 const prizeButton=document.createElement('button');prizeButton.id='placement-rewards';prizeButton.className='secondary';prizeButton.textContent='Leaderboard rewards ♕';prizeButton.onclick=()=>showPlacementRewards();$('hearts-leaderboard').after(prizeButton);
 async function showPlacementRewards(day=new Date(Date.now()-86400000).toISOString().slice(0,10)){
   dialog('placementRewards');
