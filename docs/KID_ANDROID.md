@@ -2,7 +2,7 @@
 
 ## Implemented in source
 
-The Android app requires API 31+, compiles/targets API 36, and uses Kotlin/Compose 2.2.20 with core-ui 1.0.0 from Maven Central. MainActivity is now a ComponentActivity with one native Compose root. KIDCoreProvider wraps KIDSessionProvider(AUTO) and the all-in-one KIDAgeGate. The game WebView is created only by the pass slot. Pending, prohibited, failure and connection-error screens have explicit copy and retry actions.
+The Android app requires API 31+, compiles against API 37, targets API 36, and uses AGP built-in Kotlin with Compose compiler 2.4.21 with core-ui 1.0.0 from Maven Central. MainActivity is now a ComponentActivity with one native Compose root. KIDCoreProvider wraps KIDSessionProvider(AUTO) and the all-in-one KIDAgeGate. The game WebView is created only by the pass slot. Pending, prohibited, failure and connection-error screens have explicit copy and retry actions.
 
 Android build resources select the public Kai key and API URL. Debug and signed sideload builds use the test environment. The Play upload bundle (bundleStore) uses the live environment and stores its Kai session separately from test builds. **Add package/applicationId `com.fireflygrove.game` to that test key's Android app allowlist in Kai.**
 

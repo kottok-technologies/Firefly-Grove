@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
@@ -28,7 +27,7 @@ if (adAppId.startsWith('ca-app-pub-3940256099942544') && !adUnitId.startsWith('c
 
 android {
     namespace 'com.fireflygrove.game'
-    compileSdk 36
+    compileSdk 37
     defaultConfig {
         applicationId 'com.fireflygrove.game'
         minSdk 31
@@ -66,8 +65,10 @@ android {
             resValue 'string', 'kid_base_url', 'https://kai-api.k-id.com/fapi/v1'
         }
     }
-    buildFeatures { compose true }
-    kotlinOptions { jvmTarget = '17' }
+    buildFeatures {
+        compose true
+        resValues true
+    }
     sourceSets { main { assets.srcDirs = ['../../web'] } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
@@ -83,7 +84,7 @@ tasks.configureEach { task ->
 dependencies {
     implementation 'com.k-id:core-ui:1.0.0'
     implementation 'androidx.activity:activity-compose:1.10.1'
-    implementation platform('androidx.compose:compose-bom:2025.09.00')
+    implementation platform('androidx.compose:compose-bom:2026.09.00')
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.webkit:webkit:1.12.1'
     implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
