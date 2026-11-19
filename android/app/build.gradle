@@ -32,7 +32,7 @@ android {
         applicationId 'com.fireflygrove.game'
         minSdk 31
         targetSdk 36
-        versionCode 28
+        versionCode 29
         versionName '0.1.0'
         resValue 'string', 'game_services_project_id', playGamesProjectId
         resValue 'string', 'kid_publishable_key', 'kgp_test_2e652nurppaaae46i7yji4xwihp7pkxg3lgvmozmyjjteq75rzxarftitjaz7ni'
@@ -54,6 +54,9 @@ android {
             resValue 'string', 'rewarded_ad_unit_id', 'ca-app-pub-3940256099942544/5224354917'
         }
         release {
+            optimization {
+                enable = true
+            }
             resValue 'string', 'admob_app_id', adAppId
             resValue 'string', 'rewarded_ad_unit_id', adUnitId
             signingConfig signingConfigs.release
