@@ -21,7 +21,7 @@ test('k-ID bridge correlates messages, times out, and ignores malformed/unsolici
 });
 test('Android online actions require native permission and backend claim proof; browser preview stays independent',async()=>{
   const code=await import('node:fs/promises').then(fs=>fs.readFile(new URL('../web/kid-bridge.js',import.meta.url),'utf8'));
-  let status={rankings:true,username:true,proof:'a'.repeat(64)};
+  let status={rankings:true,publicProfile:true,username:true,proof:'a'.repeat(64)};
   globalThis.FireflyKid={postMessage(text){const {id}=JSON.parse(text);queueMicrotask(()=>this.onmessage({data:JSON.stringify({...status,id})}));}};
   const module=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
   assert.deepEqual(await module.onlineConsent('hearts'),{'X-Firefly-Consent':'a'.repeat(64)});
@@ -32,6 +32,7 @@ test('Android online actions require native permission and backend claim proof; 
   await assert.rejects(module.onlineConsent('profile'),/Custom usernames/);
   await assert.rejects(module.requireCustomUsername(),/Custom usernames/);
   status={...status,rankings:false};await assert.rejects(module.onlineConsent('runs'),/rankings are off/);
-  status={...status,rankings:true,proof:''};await assert.rejects(module.onlineConsent('hearts'),/verification is pending/);
+  status={...status,rankings:true,publicProfile:false};await assert.rejects(module.onlineConsent('hearts'),/Public profile is off/);
+  status={...status,publicProfile:true,proof:''};await assert.rejects(module.onlineConsent('hearts'),/verification is pending/);
   delete globalThis.FireflyKid;
 });

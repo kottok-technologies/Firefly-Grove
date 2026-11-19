@@ -127,7 +127,12 @@ export function createHandler(store,{now=()=>Date.now(),consent=null,enforceCons
         if(!run)throw new ApiError(404,'Ranked run not found for this player.');
         if(run.status==='retired')throw new ApiError(409,'This run was replaced by a newer attempt.');
         if(run.status==='active'){
-          const elapsedMs=time-run.startedAt;if(elapsedMs<1||elapsedMs>36*3600000)throw new ApiError(409,'This run has expired. Start a new race.');
+          const maxRunMs=36*3600000;
+          const ticketAgeMs=time-run.startedAt;
+          if(ticketAgeMs<1||ticketAgeMs>maxRunMs)throw new ApiError(409,'This run has expired. Start a new race.');
+          // Existing releases omit elapsedMs and retain server timing.
+          const elapsedMs=input.elapsedMs===undefined?ticketAgeMs:input.elapsedMs;
+          if(!Number.isSafeInteger(elapsedMs)||elapsedMs<1||elapsedMs>maxRunMs)throw new ApiError(400,'Invalid race time.');
           const mistakes=validateFinds(run.day,input.finds);
           run=await store.finishRun({...run,status:'finished',finishedAt:time,elapsedMs,mistakes});
         }
